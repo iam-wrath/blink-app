@@ -1,0 +1,7 @@
+[
+  { "name": "WISE 0855",      "ra": 133.7951, "dec": -7.2451, "fov": 0.1 },
+  { "name": "Barnard's Star", "ra": 269.452,  "dec": 4.693,   "fov": 0.2 },
+  { "name": "Epsilon Indi B", "ra": 0,        "dec": 0,       "fov": 0.1 },
+  { "name": "RW Aurigae",     "ra": 0,        "dec": 0,       "fov": 0.1 },
+  { "name": "R Draconis",     "ra": 0,        "dec": 0,       "fov": 0.1 }
+]

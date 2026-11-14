@@ -1,13 +1,8 @@
 {
-  "regionId": "region-01",
-  "imageSize": { "width": 1024, "height": 1024 },
-  "images": { "epochA": "data/region-01/a.png", "epochB": "data/region-01/b_aligned.png" },
-  "candidates": [
-    { "id": "c-001", "x": 200, "y": 300, "ra": 150.10, "dec": 2.30, "fluxDiff": 18.7, "confidence": 0.91, "knownMatch": { "name": "(433) Eros", "separationArcsec": 4.2 } },
-    { "id": "c-002", "x": 512, "y": 480, "ra": 150.12, "dec": 2.33, "fluxDiff": 12.1, "confidence": 0.74, "knownMatch": null },
-    { "id": "c-003", "x": 700, "y": 220, "ra": 150.15, "dec": 2.28, "fluxDiff": 9.4,  "confidence": 0.55, "knownMatch": null },
-    { "id": "c-004", "x": 330, "y": 760, "ra": 150.09, "dec": 2.36, "fluxDiff": 7.9,  "confidence": 0.42, "knownMatch": { "name": "(1036) Ganymed", "separationArcsec": 11.0 } },
-    { "id": "c-005", "x": 880, "y": 640, "ra": 150.18, "dec": 2.35, "fluxDiff": 6.2,  "confidence": 0.30, "knownMatch": null }
-  ],
-  "counts": { "total": 5, "matchedKnown": 2, "unmatched": 3 }
+  "query": { "ra": 133.7951, "dec": -7.2451, "fovDeg": 0.1, "detector": "D2", "mode": "raw" },
+  "imageSize": { "width": 58, "height": 58 },
+  "frames": [
+    { "id": "f-001", "obsTime": "2025-08-14T03:21:00Z", "detector": "D2", "wavelengthUm": 1.35,
+      "release": "QR3", "flags": 0, "png": "data/cache/f-001.png" }
+  ]
 }

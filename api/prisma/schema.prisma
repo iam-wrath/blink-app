@@ -4,20 +4,11 @@ generator client {
 
 datasource db {
   provider = "sqlite"
-  url      = env("DATABASE_URL")
+  url      = "file:./dev.db"
 }
 
-model Candidate {
-  id          String   @id
-  regionId    String
-  x           Float
-  y           Float
-  ra          Float
-  dec         Float
-  fluxDiff    Float
-  confidence  Float
-  knownName   String?
-  knownSepArc Float?
-  status      String   @default("pending")
-  createdAt   DateTime @default(now())
+model SearchCache {
+  key       String   @id
+  response  String
+  createdAt DateTime @default(now())
 }
