@@ -1,13 +1,17 @@
 # Blink: web (Jude)
 
-The website the judges see, in the SPHEREx Explorer style (dark mission-control look).
-Covers guide steps J1–J8, plus zoom and pan from the workplan.
+The website the judges see, in a plain science-tool style (inspired by WiseView).
+Menu across the top: **Compare · Sky Explorer · Discoveries · Saved · About**.
 
-**Viewer modes:** Blink (manual flip or auto-blink at 0.5–5 Hz) · Split slider (wipe) ·
-Side by side (synced zoom) · Difference map (B − A, built in the browser).
-**Tools:** wheel / double-click zoom, drag to pan, cursor pixel + approximate RA/Dec,
-candidate cutouts with a mini blink, confidence histogram filter, queue filters,
-search by id or RA, Dec, sortable table with CSV export, keyboard shortcuts (press `?`).
+- **Compare**: blink (auto or Space), wipe, side by side, difference; zoom, contrast,
+  brightness, invert; rings on candidates; confirm / reject; frame comparison numbers.
+  "Team data" = the team's real data from Kwaku's API. M42, M31, TRAPPIST-1 or any
+  name = a simulated sky with 8 visits.
+- **Sky Explorer**: simulated sky, time machine over 8 visits, grid with RA/Dec,
+  pixel readout, light curve, difference mask.
+- **Discoveries**: candidates as cards, difference map, report, bookmark.
+- **Saved**: saved comparisons, sets and pixels with notes (kept in this browser).
+- **About**: mission facts, what is real and what is simulated.
 
 ## Run it
 

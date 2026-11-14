@@ -2,64 +2,43 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as api from './api';
 import { fakeResponse, saveFakeStatus } from './fakeData';
 import type { DetectResponse, Source, Status, Summary } from './types';
-import { Viewer, type Epoch, type Mode } from './components/Viewer';
-import { CandidateCard, Queue, RunCard } from './components/Inspector';
-import { HelpDialog, Sidebar, TopBar, type Route } from './components/Chrome';
-import { AboutPage, CandidatesPage } from './components/Pages';
-import { centerOn, HOME, zoomAt, type View } from './lib/view';
-import { passes, type Filter } from './lib/status';
+import { INITIAL, loadSaved, storeSaved, type Ctx, type Page, type SavedItem, type St, type Team } from './state';
+import { useRealDiff } from './lib/realDiff';
+import { model, simTarget, isTeam } from './lib/model';
+import { ComparePage, compareView } from './components/Compare';
+import { ExplorePage } from './components/Explore';
+import { DiscPage } from './components/Discoveries';
+import { AboutPage, SavedPage } from './components/SavedAbout';
 
-const ROUTES: Route[] = ['compare', 'candidates', 'about'];
-const routeFromHash = (): Route => {
-  const h = window.location.hash.replace('#', '') as Route;
-  return ROUTES.includes(h) ? h : 'compare';
+const PAGES: [Page, string][] = [
+  ['compare', 'Compare'],
+  ['explore', 'Sky Explorer'],
+  ['disc', 'Discoveries'],
+  ['saved', 'Saved'],
+  ['about', 'About'],
+];
+const pageFromHash = (): Page => {
+  const h = window.location.hash.replace('#', '') as Page;
+  return PAGES.some(([p]) => p === h) ? h : 'compare';
 };
 
-interface Toast {
-  id: number;
-  text: string;
-  kind: 'ok' | 'err';
-}
-
 export default function App() {
+  const [S, setS] = useState<St>(() => ({ ...INITIAL, page: pageFromHash(), saved: loadSaved() }));
+  const set = useCallback((p: Partial<St>) => setS((s) => ({ ...s, ...p })), []);
+  const ref = useRef(S);
+  ref.current = S;
+
+  // ---------- team data (Kwaku's API, or the built-in sample) ----------
   const [data, setData] = useState<DetectResponse | null>(null);
   const [source, setSource] = useState<Source>(api.FORCE_FAKE ? 'fake' : 'api');
   const [summary, setSummary] = useState<Summary | null>(null);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [route, setRoute] = useState<Route>(routeFromHash);
+  const [teamRunning, setTeamRunning] = useState(false);
 
-  // viewer state
-  const [mode, setMode] = useState<Mode>('blink');
-  const [epoch, setEpoch] = useState<Epoch>('B');
-  const [playing, setPlaying] = useState(false);
-  const [rate, setRate] = useState(2);
-  const [split, setSplit] = useState(50);
-  const [gain, setGain] = useState(4);
-  const [view, setView] = useState<View>(HOME);
-  const [markers, setMarkers] = useState(true);
-  const [labels, setLabels] = useState(true);
-
-  // review state
-  const [filter, setFilter] = useState<Filter>('all');
-  const [minConf, setMinConf] = useState(0);
-  const [threshold, setThreshold] = useState(5);
-  const [running, setRunning] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [help, setHelp] = useState(false);
-  const [toasts, setToasts] = useState<Toast[]>([]);
-  const toastId = useRef(0);
-
-  const toast = useCallback((text: string, kind: Toast['kind'] = 'ok') => {
-    const id = ++toastId.current;
-    setToasts((t) => [...t.slice(-2), { id, text, kind }]);
-    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 2600);
-  }, []);
-
-  useEffect(() => {
-    const on = () => setRoute(routeFromHash());
-    window.addEventListener('hashchange', on);
-    return () => window.removeEventListener('hashchange', on);
-  }, []);
+  const say = useCallback((t: string) => {
+    set({ toast: t });
+    window.clearTimeout((say as unknown as { t?: number }).t);
+    (say as unknown as { t?: number }).t = window.setTimeout(() => set({ toast: '' }), 2600);
+  }, [set]);
 
   const refreshSummary = useCallback(async (d: DetectResponse, src: Source) => {
     if (src === 'api') {
@@ -67,7 +46,7 @@ export default function App() {
         setSummary(await api.getSummary());
         return;
       } catch {
-        /* count locally instead */
+        /* count locally */
       }
     }
     setSummary(api.summarize(d));
@@ -77,178 +56,151 @@ export default function App() {
     (d: DetectResponse, src: Source) => {
       setData(d);
       setSource(src);
-      setSelectedId((cur) =>
-        d.candidates.some((c) => c.id === cur) ? cur : ([...d.candidates].sort((a, b) => b.confidence - a.confidence)[0]?.id ?? null),
-      );
       refreshSummary(d, src);
     },
     [refreshSummary],
   );
 
-  // First load: the API if it answers, otherwise sample data so work never stops.
   useEffect(() => {
     (async () => {
       if (api.FORCE_FAKE) return show(fakeResponse(), 'fake');
       try {
         show(await api.getCandidates(), 'api');
       } catch (e) {
-        console.warn('[blink] API not reachable, using sample data', e);
+        console.warn('[blink] API not reachable, using the built-in sample', e);
         show(fakeResponse(), 'fake');
-        toast(`API not reachable at ${api.API_URL}. Showing sample data.`, 'err');
       }
     })();
-  }, [show, toast]);
-
-  // Auto-blink
-  useEffect(() => {
-    if (!playing || mode !== 'blink') return;
-    const t = setInterval(() => setEpoch((e) => (e === 'A' ? 'B' : 'A')), 1000 / (rate * 2));
-    return () => clearInterval(t);
-  }, [playing, rate, mode]);
+  }, [show]);
 
   const sorted = useMemo(() => (data ? [...data.candidates].sort((a, b) => b.confidence - a.confidence) : []), [data]);
-  const visible = useMemo(() => sorted.filter((c) => passes(c, filter, minConf) || c.id === selectedId), [sorted, filter, minConf, selectedId]);
-  const queue = useMemo(() => sorted.filter((c) => passes(c, filter, minConf)), [sorted, filter, minConf]);
-  const selected = sorted.find((c) => c.id === selectedId) ?? null;
-  const qIndex = Math.max(0, queue.findIndex((c) => c.id === selectedId));
+  const urls = api.imageUrls(source);
+  const rd = useRealDiff(data ? urls.a : null, data ? urls.b : null, urls.diff);
 
-  const select = useCallback((id: string) => setSelectedId(id), []);
-
-  const step = useCallback(
-    (dir: 1 | -1) => {
-      if (!queue.length) return;
-      const i = queue.findIndex((c) => c.id === selectedId);
-      const next = queue[(i + dir + queue.length) % queue.length];
-      setSelectedId(next.id);
-      if (view.zoom > 1 && data) setView(centerOn(next.x / data.imageSize.width, next.y / data.imageSize.height, view.zoom));
-    },
-    [queue, selectedId, view.zoom, data],
-  );
-
-  const onStatus = useCallback(
-    async (status: Status) => {
-      if (!data || !selected) return;
-      const id = selected.id;
+  const setTeamStatus = useCallback(
+    async (id: string, status: Status) => {
+      if (!data) return;
       const prev = data;
       const next = { ...data, candidates: data.candidates.map((c) => (c.id === id ? { ...c, status } : c)) };
       setData(next);
-      const msg = status === 'pending' ? `${id} back to unreviewed` : `${id} ${status}`;
+      const msg = status === 'pending' ? `${id} back to not reviewed` : `${id} ${status}`;
       if (source === 'fake') {
         saveFakeStatus(id, status);
         setSummary(api.summarize(next));
-        toast(msg);
-        return;
+        return say(msg + ' (sample data, saved in this browser)');
       }
-      setSaving(true);
       try {
         await api.setStatus(id, status);
         await refreshSummary(next, 'api');
-        toast(msg);
+        say(msg);
       } catch (e) {
         console.error(e);
         setData(prev);
-        toast(`Couldn't save ${id}. Is the API running?`, 'err');
-      } finally {
-        setSaving(false);
+        say(`Couldn’t save ${id}: is the API running, and does it have PATCH /api/candidates/:id?`);
       }
     },
-    [data, selected, source, refreshSummary, toast],
+    [data, source, refreshSummary, say],
   );
 
-  const onRun = useCallback(async () => {
-    setRunning(true);
+  const runTeam = useCallback(async () => {
+    setTeamRunning(true);
     try {
       if (api.FORCE_FAKE) {
-        await new Promise((r) => setTimeout(r, 1400));
+        await new Promise((r) => setTimeout(r, 900));
         show(fakeResponse(), 'fake');
-        toast('Sample detection finished');
       } else {
-        const d = await api.runDetect(threshold);
+        const d = await api.runDetect(ref.current.th >= 12 ? 5.0 : 5.0);
         show(d, 'api');
-        toast(`Detection finished: ${d.candidates.length} candidates`);
+        say(`Detection finished: ${d.candidates.length} candidates`);
       }
     } catch (e) {
       console.error(e);
-      toast('Detection failed or the API is down. Keeping the last result.', 'err');
+      say('Detection failed or POST /api/detect is not there yet. Keeping the last result.');
     } finally {
-      setRunning(false);
+      setTeamRunning(false);
     }
-  }, [show, threshold, toast]);
+  }, [show, say]);
 
-  const jump = useCallback(
-    (q: string): string | null => {
-      const t = q.trim();
-      if (!t || !data) return null;
-      const byId = sorted.find((c) => c.id.toLowerCase() === t.toLowerCase() || c.id.toLowerCase().endsWith(t.toLowerCase()));
-      const nums = t.split(/[\s,]+/).map(Number);
-      let target = byId;
-      if (!target && nums.length === 2 && nums.every(Number.isFinite)) {
-        const [ra, dec] = nums;
-        target = [...sorted].sort(
-          (a, b) => Math.hypot((a.ra - ra) * Math.cos((dec * Math.PI) / 180), a.dec - dec) - Math.hypot((b.ra - ra) * Math.cos((dec * Math.PI) / 180), b.dec - dec),
-        )[0];
-      }
-      if (!target) return 'No match';
-      setSelectedId(target.id);
-      setFilter('all');
-      setMinConf(0);
-      window.location.hash = 'compare';
-      setView(centerOn(target.x / data.imageSize.width, target.y / data.imageSize.height, 3));
-      return null;
-    },
-    [data, sorted],
-  );
+  const team: Team = { data, source, summary, urls, sorted, setStatus: setTeamStatus, run: runTeam, running: teamRunning, rd };
 
-  // Keyboard shortcuts
+  // ---------- saving ----------
+  const tgName = isTeam(S) ? `Team data · ${data?.regionId ?? 'region-01'}` : simTarget(S).n;
+  const save: Ctx['save'] = (item) => {
+    const cur = ref.current;
+    const full: SavedItem = { ...item, id: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, ts: Date.now(), note: '', name: tgName, src: cur.src, custom: cur.custom ?? undefined };
+    const dup = cur.saved.some((o) => o.type === full.type && o.src === full.src && o.A === full.A && o.B === full.B && o.f === full.f && o.x === full.x && o.y === full.y);
+    if (dup) return say('Already in My observations');
+    const saved = [full, ...cur.saved];
+    storeSaved(saved);
+    set({ saved });
+    say('Saved to My observations');
+  };
+  const ctx: Ctx = { S, set, team, say, save, tgName };
+
+  // ---------- page in the address bar ----------
   useEffect(() => {
-    const typing = (t: EventTarget | null) =>
-      t instanceof HTMLElement && (t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName) || t.getAttribute('role') === 'slider');
+    const on = () => set({ page: pageFromHash() });
+    window.addEventListener('hashchange', on);
+    return () => window.removeEventListener('hashchange', on);
+  }, [set]);
+  useEffect(() => {
+    if (window.location.hash.replace('#', '') !== S.page) window.location.hash = S.page;
+  }, [S.page]);
+
+  // ---------- timers: blink, time machine ----------
+  useEffect(() => {
+    const last = { blink: 0, tm: 0, xb: 0 };
+    const t = setInterval(() => {
+      const s = ref.current;
+      const now = Date.now();
+      const up: Partial<St> = {};
+      if (s.page === 'compare' && s.playing && s.mode === 'blink' && now - last.blink >= s.interval) {
+        up.epoch = s.epoch === 'A' ? 'B' : 'A';
+        last.blink = now;
+      }
+      if (s.page === 'explore' && s.xplay && now - last.tm >= 1400 / s.speed) {
+        last.tm = now;
+        if (s.xc < 7) up.xc = s.xc + 1;
+        else if (s.loop) up.xc = 0;
+        else up.xplay = false;
+      }
+      if (s.page === 'explore' && s.xblink && now - last.xb >= 400) {
+        up.bph = !s.bph;
+        last.xb = now;
+      }
+      if (Object.keys(up).length) setS((x) => ({ ...x, ...up }));
+    }, 50);
+    return () => clearInterval(t);
+  }, []);
+
+  // ---------- keyboard (Compare) ----------
+  useEffect(() => {
+    const typing = (t: EventTarget | null) => t instanceof HTMLElement && (t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName));
     const down = (e: KeyboardEvent) => {
-      if (e.ctrlKey || e.metaKey || e.altKey) return;
-      if (e.key === 'Escape') return setHelp(false);
-      if (typing(e.target) || help) return;
+      const s = ref.current;
+      if (s.page !== 'compare' || typing(e.target) || e.ctrlKey || e.metaKey || e.altKey) return;
+      const { shown, selIdx, sel, m } = compareView({ ...ctx, S: s });
       const k = e.key.toLowerCase();
+      const status = (v: Status) => {
+        if (!sel) return;
+        if (m.team) setTeamStatus(sel.key, v);
+        else {
+          const tg = simTarget(s);
+          set({ simStatus: { ...s.simStatus, [`${tg.key}|${s.A}|${s.B}|${sel.key}`]: v } });
+        }
+      };
       if (e.code === 'Space') {
         e.preventDefault();
-        if (e.repeat) return;
-        setPlaying(false);
-        setMode('blink');
-        setEpoch((x) => (x === 'A' ? 'B' : 'A'));
-        return;
-      }
-      const map: Record<string, () => void> = {
-        p: () => {
-          setMode('blink');
-          setPlaying((x) => !x);
-        },
-        '1': () => setMode('blink'),
-        '2': () => setMode('wipe'),
-        '3': () => setMode('side'),
-        '4': () => setMode('diff'),
-        j: () => step(1),
-        arrowright: () => step(1),
-        k: () => step(-1),
-        arrowleft: () => step(-1),
-        c: () => onStatus('confirmed'),
-        r: () => onStatus('rejected'),
-        u: () => onStatus('pending'),
-        f: () => selected && data && setView(centerOn(selected.x / data.imageSize.width, selected.y / data.imageSize.height, Math.max(3, view.zoom))),
-        '+': () => setView((v) => zoomAt(v, 0.5, 0.5, v.zoom * 1.5)),
-        '=': () => setView((v) => zoomAt(v, 0.5, 0.5, v.zoom * 1.5)),
-        '-': () => setView((v) => zoomAt(v, 0.5, 0.5, v.zoom / 1.5)),
-        '0': () => setView(HOME),
-        m: () => setMarkers((x) => !x),
-        l: () => setLabels((x) => !x),
-        '?': () => setHelp(true),
-      };
-      const fn = map[k];
-      if (fn && route === 'compare') {
-        e.preventDefault();
-        fn();
-      } else if (k === '?') setHelp(true);
+        if (!e.repeat) set({ playing: false, mode: 'blink', epoch: s.epoch === 'A' ? 'B' : 'A' });
+      } else if (k === 'p') set({ playing: !s.playing, mode: 'blink' });
+      else if (k === 'c') status('confirmed');
+      else if (k === 'r') status('rejected');
+      else if (k === 'u') status('pending');
+      else if ((k === 'j' || k === 'arrowright') && shown.length) set({ sel: (selIdx + 1) % shown.length });
+      else if ((k === 'k' || k === 'arrowleft') && shown.length) set({ sel: (selIdx - 1 + shown.length) % shown.length });
     };
     const up = (e: KeyboardEvent) => {
-      if (e.code === 'Space' && !typing(e.target)) e.preventDefault();
+      if (e.code === 'Space' && ref.current.page === 'compare' && !typing(e.target)) e.preventDefault();
     };
     window.addEventListener('keydown', down);
     window.addEventListener('keyup', up);
@@ -256,133 +208,40 @@ export default function App() {
       window.removeEventListener('keydown', down);
       window.removeEventListener('keyup', up);
     };
-  }, [help, onStatus, route, selected, step, data, view.zoom]);
+  });
 
-  if (!data) {
-    return (
-      <div className="boot">
-        <span className="spinner" /> <span className="mono">CONNECTING TO SKY DATA…</span>
-      </div>
-    );
-  }
-
-  const urls = api.imageUrls(source);
+  const savedN = S.saved.length;
+  void model;
 
   return (
     <div className="app">
-      <Sidebar route={route} source={source} apiUrl={api.API_URL} regionId={data.regionId} onHelp={() => setHelp(true)} />
-      <div className="main-col">
-        <TopBar summary={summary} onJump={jump} />
-        {route === 'compare' && (
-          <>
-            <div className="ribbon">
-              <span className="mono cyan-text">
-                <i className="pulse" /> DUAL-EPOCH COMPARATOR
-              </span>
-              <span className="sep" />
-              <span className="mono muted">REGION</span>
-              <b className="region">{data.regionId}</b>
-              <span className="mono chip-dim">
-                {data.imageSize.width} × {data.imageSize.height} PX
-              </span>
-              <span className="grow" />
-              <span className="mono chip-dim">
-                <i className="dot dot-a" /> EPOCH A
-              </span>
-              <span className="mono muted">⇄</span>
-              <span className="mono chip-dim">
-                <i className="dot dot-b" /> EPOCH B
-              </span>
-              <span className="mono chip-dim">PAN &amp; ZOOM: SYNCED</span>
-            </div>
-            <main className="workspace">
-              <div className="ws-main">
-                <Viewer
-                  mode={mode}
-                  onMode={(m) => {
-                    setMode(m);
-                    if (m !== 'blink') setPlaying(false);
-                  }}
-                  epoch={epoch}
-                  onFlip={() => {
-                    setPlaying(false);
-                    setEpoch((x) => (x === 'A' ? 'B' : 'A'));
-                  }}
-                  playing={playing}
-                  onPlaying={setPlaying}
-                  rate={rate}
-                  onRate={setRate}
-                  split={split}
-                  onSplit={setSplit}
-                  gain={gain}
-                  onGain={setGain}
-                  markers={markers}
-                  onMarkers={setMarkers}
-                  labels={labels}
-                  onLabels={setLabels}
-                  urls={urls}
-                  width={data.imageSize.width}
-                  height={data.imageSize.height}
-                  candidates={visible}
-                  all={sorted}
-                  selected={selected}
-                  onSelect={select}
-                  view={view}
-                  onView={setView}
-                  source={source}
-                />
-              </div>
-              <aside className="ws-side" aria-label="Inspector">
-                <CandidateCard
-                  c={selected}
-                  index={qIndex}
-                  count={queue.length}
-                  onPrev={() => step(-1)}
-                  onNext={() => step(1)}
-                  onStatus={onStatus}
-                  saving={saving}
-                  urls={urls}
-                  width={data.imageSize.width}
-                  height={data.imageSize.height}
-                />
-                <RunCard
-                  summary={summary}
-                  all={sorted}
-                  minConf={minConf}
-                  onMinConf={setMinConf}
-                  threshold={threshold}
-                  onThreshold={setThreshold}
-                  running={running}
-                  onRun={onRun}
-                />
-                <Queue all={sorted} filter={filter} onFilter={setFilter} minConf={minConf} selectedId={selectedId} onSelect={select} />
-              </aside>
-            </main>
-          </>
-        )}
-        {route === 'candidates' && (
-          <CandidatesPage
-            all={sorted}
-            filter={filter}
-            onFilter={setFilter}
-            minConf={minConf}
-            onMinConf={setMinConf}
-            onOpen={(id) => {
-              setSelectedId(id);
-              window.location.hash = 'compare';
-            }}
-          />
-        )}
-        {route === 'about' && <AboutPage sample={source === 'fake'} />}
-      </div>
-
-      {help && <HelpDialog onClose={() => setHelp(false)} />}
-      <div className="toasts" aria-live="polite">
-        {toasts.map((t) => (
-          <div key={t.id} className={`toast ${t.kind}`}>
-            {t.text}
+      <header className="top">
+        <div className="brand">
+          <svg width="34" height="22" viewBox="0 0 34 22" aria-hidden="true">
+            <circle cx="11" cy="11" r="8" fill="none" stroke="#f2f2f2" strokeWidth="2" />
+            <circle cx="23" cy="11" r="8" fill="none" stroke="#f2f2f2" strokeWidth="2" strokeDasharray="3 2.5" />
+            <circle cx="23" cy="11" r="2.2" fill="#ff3b30" />
+          </svg>
+          <div>
+            <span className="brand-name">Blink</span>
+            <span className="brand-sub">SPHEREx moving-object finder</span>
           </div>
-        ))}
+        </div>
+        <nav className="menu" aria-label="Pages">
+          {PAGES.map(([p, label]) => (
+            <button key={p} type="button" className={S.page === p ? 'on' : ''} aria-current={S.page === p ? 'page' : undefined} onClick={() => set({ page: p })}>
+              {label}
+              {p === 'saved' && savedN ? ` (${savedN})` : ''}
+            </button>
+          ))}
+        </nav>
+      </header>
+      <div className="body">
+        {S.page === 'compare' && <ComparePage {...ctx} />}
+        {S.page === 'explore' && <ExplorePage {...ctx} />}
+        {S.page === 'disc' && <DiscPage {...ctx} />}
+        {S.page === 'saved' && <SavedPage {...ctx} />}
+        {S.page === 'about' && <AboutPage />}
       </div>
     </div>
   );
