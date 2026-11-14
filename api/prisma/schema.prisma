@@ -1,0 +1,23 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Candidate {
+  id          String   @id
+  regionId    String
+  x           Float
+  y           Float
+  ra          Float
+  dec         Float
+  fluxDiff    Float
+  confidence  Float
+  knownName   String?
+  knownSepArc Float?
+  status      String   @default("pending")
+  createdAt   DateTime @default(now())
+}
