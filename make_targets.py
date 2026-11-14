@@ -87,9 +87,13 @@ def main():
             notes.append((name, ident, ra, dec, 0, 0, 0))
         presets.append({"name": name, "ra": round(ra, 5), "dec": round(dec, 5), "fov": fov})
 
-    with open("contract/targets.json", "w") as f:
+    out_path = "contract/targets.json"
+    if len(presets) < len(TARGETS) and os.path.exists(out_path):
+        out_path = "contract/targets_simbad_partial.json"  # never overwrite a good file with an incomplete one
+        print("Some lookups failed: NOT touching contract/targets.json")
+    with open(out_path, "w") as f:
         json.dump(presets, f, indent=2)
-    print("Wrote contract/targets.json")
+    print(f"Wrote {out_path}")
 
     lines = ["# The five test targets", "",
              f"Positions from SIMBAD, moved forward to {EPOCH} with SIMBAD's proper motion.", "",
@@ -130,9 +134,10 @@ def main():
                   "- WISE 0855: moved __ px (__ arcsec) between ____ and ____, direction ____.",
                   "- Barnard's Star: moved __ px between ____ and ____."]
 
-    with open("docs/targets.md", "w") as f:
+    md_path = "docs/targets.md" if out_path == "contract/targets.json" else "docs/targets_simbad_partial.md"
+    with open(md_path, "w") as f:
         f.write("\n".join(lines) + "\n")
-    print("Wrote docs/targets.md")
+    print(f"Wrote {md_path}")
 
 
 if __name__ == "__main__":
