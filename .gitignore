@@ -1,0 +1,32 @@
+# Data (big files, shared by USB instead)
+data/
+*.fits
+*.fit
+*.fits.gz
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Node
+node_modules/
+dist/
+build/
+
+# Secrets and local config
+.env
+.env.*
+!.env.example
+
+# Databases and caches
+*.db
+*.sqlite
+api/prisma/dev.db
+known_cache.json
+
+# OS and editor junk
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

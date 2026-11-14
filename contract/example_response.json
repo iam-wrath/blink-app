@@ -1,17 +1,13 @@
-POST http://localhost:8000/detect          <- Kwaku sends this to Christabel's service
-{ "regionId": "region-01",
-  "epochA": "data/region-01/epoch_a.fits",
-  "epochB": "data/region-01/epoch_b.fits",
-  "threshold": 5.0 }
-RESPONSE
-{ "regionId": "region-01",
+{
+  "regionId": "region-01",
   "imageSize": { "width": 1024, "height": 1024 },
   "images": { "epochA": "data/region-01/a.png", "epochB": "data/region-01/b_aligned.png" },
   "candidates": [
-    { "id": "c-001",
-      "x": 412.5, "y": 630.2,        <- pixel position IN THE PNG (0,0 = top-left)
-      "ra": 150.1234, "dec": 2.3456, <- sky position in degrees
-      "fluxDiff": 18.7,
-      "confidence": 0.82,            <- 0 to 1
-      "knownMatch": null } ],        <- or { "name": "...", "separationArcsec": 4.2 }
-  "counts": { "total": 14, "matchedKnown": 9, "unmatched": 5 } }
+    { "id": "c-001", "x": 200, "y": 300, "ra": 150.10, "dec": 2.30, "fluxDiff": 18.7, "confidence": 0.91, "knownMatch": { "name": "(433) Eros", "separationArcsec": 4.2 } },
+    { "id": "c-002", "x": 512, "y": 480, "ra": 150.12, "dec": 2.33, "fluxDiff": 12.1, "confidence": 0.74, "knownMatch": null },
+    { "id": "c-003", "x": 700, "y": 220, "ra": 150.15, "dec": 2.28, "fluxDiff": 9.4,  "confidence": 0.55, "knownMatch": null },
+    { "id": "c-004", "x": 330, "y": 760, "ra": 150.09, "dec": 2.36, "fluxDiff": 7.9,  "confidence": 0.42, "knownMatch": { "name": "(1036) Ganymed", "separationArcsec": 11.0 } },
+    { "id": "c-005", "x": 880, "y": 640, "ra": 150.18, "dec": 2.35, "fluxDiff": 6.2,  "confidence": 0.30, "knownMatch": null }
+  ],
+  "counts": { "total": 5, "matchedKnown": 2, "unmatched": 3 }
+}
