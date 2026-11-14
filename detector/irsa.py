@@ -10,6 +10,10 @@ find_cutouts(ra, dec, fov_deg, detector) -> list of dicts, sorted by obsTime:
 The TAP query is copied from IRSA's SPHEREx cutout tutorial
 (caltech-ipac.github.io/irsa-tutorials/spherex-cutouts). Only its column names are used.
 
+Offline: if IRSA can't be reached, find_cutouts() falls back to the .fits files already in
+data/raw/<target>/ (the target nearest to ra/dec in contract/targets.json). Force it with
+    set BLINK_OFFLINE=1        (Windows cmd)   or   $env:BLINK_OFFLINE="1"   (PowerShell)
+
 Test (from the project root):
     python detector/irsa.py                     # WISE 0855, 0.1 deg, D2, downloads up to 3 files
     python detector/irsa.py 133.7951 -7.2451 0.1 D2 --all     # download every frame
@@ -32,6 +36,8 @@ from astropy.coordinates import SkyCoord
 import astropy.units as u
 
 warnings.filterwarnings("ignore")
+from astropy import log as _astropy_log
+_astropy_log.setLevel("WARNING")  # hide harmless "SIP distortion" INFO notes
 
 RAW_DIR = os.path.join("data", "raw")
 
@@ -120,7 +126,7 @@ def read_frame_info(path, ra, dec):
     return wl, flags
 
 
-def find_cutouts(ra, dec, fov_deg, detector, download=True, limit=None, outdir=RAW_DIR, workers=6):
+def _find_cutouts_online(ra, dec, fov_deg, detector, download=True, limit=None, outdir=RAW_DIR, workers=6):
     """One dict per SPHEREx image covering (ra, dec), sorted by obsTime.
     download=True  : saves each cutout to data/raw/ (skips failures) and fills wavelengthUm + flags.
     download=False : metadata only (fast); wavelengthUm and flags are None.
@@ -167,6 +173,69 @@ def find_cutouts(ra, dec, fov_deg, detector, download=True, limit=None, outdir=R
     return [r for r in rows if r["path"]]  # only frames we actually have
 
 
+# ---------------------------------------------------------------------------
+# Offline fallback: frames already downloaded into data/raw/<target>/
+# ---------------------------------------------------------------------------
+def _slug(name):
+    return re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
+
+
+def find_local(ra, dec, fov_deg, detector, limit=None, raw_dir=RAW_DIR, targets_path=os.path.join("contract", "targets.json")):
+    """Same output as find_cutouts, but from .fits files already on disk (no internet).
+    Uses the folder of the contract/targets.json target nearest to (ra, dec), within one field of view."""
+    import glob
+    import json
+    _, det = _bandpass(detector)
+    want = int(det[1])
+    here = SkyCoord(ra * u.deg, dec * u.deg)
+    folders = []
+    try:
+        for t in json.load(open(targets_path)):
+            sep = here.separation(SkyCoord(t["ra"] * u.deg, t["dec"] * u.deg)).deg
+            folders.append((sep, os.path.join(raw_dir, _slug(t["name"]))))
+    except OSError:
+        pass
+    folders = [f for sep, f in sorted(folders) if sep <= max(fov_deg, 0.05)]
+    rows = []
+    for folder in folders[:1]:
+        for path in sorted(glob.glob(os.path.join(folder, "*.fits"))):
+            try:
+                hdr = fits.getheader(path, "IMAGE")
+                file_det = hdr.get("DETECTOR")
+                if file_det is not None and int(file_det) != want:
+                    continue
+                t = Time(hdr.get("MJD-AVG", hdr.get("MJD-OBS")), format="mjd", scale="utc")
+                try:
+                    wl, flags = read_frame_info(path, ra, dec)
+                except Exception:
+                    wl, flags = None, None
+                name = os.path.basename(path)
+                m = re.search(r"/spherex/([A-Za-z0-9]+)/", hdr.get("FILENAME", "") or "")
+                rows.append({"url": "file:" + path, "obsTime": t.isot[:19] + "Z", "wavelengthUm": wl,
+                             "detector": det, "release": m.group(1).upper() if m else "cached",
+                             "obsId": _obsid_from_url(name), "path": path, "flags": flags})
+            except Exception as e:
+                print(f"  skip unreadable local file {path}: {e}")
+    rows.sort(key=lambda d: d["obsTime"])
+    return rows[:limit] if limit else rows
+
+
+def find_cutouts(ra, dec, fov_deg, detector, download=True, limit=None, outdir=RAW_DIR, workers=6):
+    """One dict per SPHEREx image covering (ra, dec), sorted by obsTime (handoff H1).
+    Asks the IRSA archive first. If IRSA can't be reached (or BLINK_OFFLINE=1 is set),
+    returns the frames already saved in data/raw/<target>/ instead, in the same format."""
+    if os.environ.get("BLINK_OFFLINE") != "1":
+        try:
+            return _find_cutouts_online(ra, dec, fov_deg, detector, download=download,
+                                        limit=limit, outdir=outdir, workers=workers)
+        except Exception as e:
+            print(f"  IRSA not reachable ({type(e).__name__}); using frames saved in {RAW_DIR}/")
+    rows = find_local(ra, dec, fov_deg, detector, limit=limit)
+    if not rows:
+        print("  No saved frames for this position/detector either.")
+    return rows
+
+
 if __name__ == "__main__":
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     ra, dec, fov, det = (float(args[0]), float(args[1]), float(args[2]), args[3]) if len(args) == 4 \
@@ -176,6 +245,8 @@ if __name__ == "__main__":
     print(f"Searching SPHEREx {det} images at RA {ra}, Dec {dec}, FOV {fov} deg ...")
     res = find_cutouts(ra, dec, fov, det, download=dl, limit=lim if dl else None)
     print(f"{len(res)} images" + ("" if dl else " (metadata only)"))
+    if res and str(res[0]["url"]).startswith("file:"):
+        print("(offline: these come from data/raw/)")
     for r in res:
         wl = f"{r['wavelengthUm']:.3f} um" if r["wavelengthUm"] else "   -    "
         print(f"  {r['obsTime']}  {wl}  {r['release']:5s} flags={r['flags']}  {r['obsId']}  {r['path'] or ''}")
