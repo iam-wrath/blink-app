@@ -1,12 +1,13 @@
 import { Controller, Get } from '@nestjs/common';
-import { AppService } from './app.service.js';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 
 @Controller()
 export class AppController {
-  constructor(private readonly appService: AppService) {}
-
-  @Get()
-  getHello(): string {
-    return this.appService.getHello();
+  @Get('candidates')
+  candidates() {
+    return JSON.parse(
+      readFileSync(join(process.cwd(), '..', 'contract', 'example_response.json'), 'utf8'),
+    );
   }
 }
