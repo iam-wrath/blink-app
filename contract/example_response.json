@@ -1,0 +1,17 @@
+POST http://localhost:8000/detect          <- Kwaku sends this to Christabel's service
+{ "regionId": "region-01",
+  "epochA": "data/region-01/epoch_a.fits",
+  "epochB": "data/region-01/epoch_b.fits",
+  "threshold": 5.0 }
+RESPONSE
+{ "regionId": "region-01",
+  "imageSize": { "width": 1024, "height": 1024 },
+  "images": { "epochA": "data/region-01/a.png", "epochB": "data/region-01/b_aligned.png" },
+  "candidates": [
+    { "id": "c-001",
+      "x": 412.5, "y": 630.2,        <- pixel position IN THE PNG (0,0 = top-left)
+      "ra": 150.1234, "dec": 2.3456, <- sky position in degrees
+      "fluxDiff": 18.7,
+      "confidence": 0.82,            <- 0 to 1
+      "knownMatch": null } ],        <- or { "name": "...", "separationArcsec": 4.2 }
+  "counts": { "total": 14, "matchedKnown": 9, "unmatched": 5 } }
