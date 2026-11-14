@@ -19,6 +19,7 @@
 ## Measured motion (A6)
 - **Barnard's Star** (14 frames, D2): moves north at every visit: +3.6" Aug 2025→Mar 2026, +4" Mar→Sep 2026.
   Total ~8–9" (≈1.5 px) in 13 months; catalogue predicts ~11". Right direction, ~80% of the expected amount.
-- **WISE 0855** (D6): too faint in May 2025 (SNR ~2); Nov 2025→Apr 2026 usable (SNR 5–8).
+- **WISE 0855** (D6): detected at 4.42–4.73 µm (Nov 2025, Dec 2025, Apr 2026; SNR 5–8) but not at
+  4.86–5.01 µm (both May visits, SNR ~2), so the usable span is Nov 2025→Apr 2026.
   Shift ≈ 1 px west, matching the catalogue direction; amount uncertain (6 ± 3"). One glitch frame removed.
-- At 6.2"/pixel the motion is 1–2 pixels: best seen with the difference view and first/last frames.
+  Lesson: compare frames at similar wavelengths (the brightness changes with wavelength).
