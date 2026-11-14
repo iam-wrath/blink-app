@@ -1,7 +1,13 @@
 # Blink: web (Jude)
 
-The website the judges see: blink viewer, candidate rings, confirm/reject, summary.
+The website the judges see, in the SPHEREx Explorer style (dark mission-control look).
 Covers guide steps J1–J8, plus zoom and pan from the workplan.
+
+**Viewer modes:** Blink (manual flip or auto-blink at 0.5–5 Hz) · Split slider (wipe) ·
+Side by side (synced zoom) · Difference map (B − A, built in the browser).
+**Tools:** wheel / double-click zoom, drag to pan, cursor pixel + approximate RA/Dec,
+candidate cutouts with a mini blink, confidence histogram filter, queue filters,
+search by id or RA, Dec, sortable table with CSV export, keyboard shortcuts (press `?`).
 
 ## Run it
 
@@ -45,14 +51,23 @@ database shape (`knownName` / `knownSepArc`) in case the API returns that.
 
 ## Keys
 
-`Space` flip · `C` confirm · `R` reject
+`Space` flip · `P` auto-blink · `1–4` modes · `J/K` next/prev · `C` confirm · `R` reject ·
+`U` undo · `F` zoom to selected · `+/−/0` zoom · `M/L` rings/labels · `?` all shortcuts
+
+## Difference map with the real API
+
+The browser builds the difference from the two PNGs. For that, Kwaku's image
+responses need `Access-Control-Allow-Origin: *`. If he can't add it, he can serve
+Christabel's `diff.png` at `/api/images/diff.png` and the app uses that instead.
 
 ## Where things are
 
 - `src/App.tsx`: loads data, fallback to sample data, keyboard shortcuts
 - `src/api.ts`: every API call and the settings
-- `src/components/`: `TopBar`, `Viewer` (blink, side by side, zoom), `SkyImage` (picture and rings), `DetailPanel`, `CandidateList`, `Mascot`
-- `src/styles.css`: the cartoon style (colours at the top)
+- `src/components/`: `Viewer` (modes, toolbar, zoom bar), `Stage` (one picture with rings, wipe, zoom/pan),
+  `Inspector` (candidate card, detection run, queue), `Chrome` (sidebar, top bar, shortcuts), `Pages` (table, how it works)
+- `src/lib/`: zoom maths, difference map, approximate sky coordinates, status helpers
+- `src/styles.css`: the dark theme (colours at the top, from DESIGN.md)
 - `public/fake/`: two sample sky pictures where c-001 and c-002 really move
 
 ## If something looks wrong

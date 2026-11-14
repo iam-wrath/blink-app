@@ -8,11 +8,13 @@ import type { Candidate, DetectResponse, Source, Status, Summary } from './types
 export const API_URL = (import.meta.env.VITE_API_URL ?? 'http://localhost:3000/api').replace(/\/$/, '');
 export const FORCE_FAKE = import.meta.env.VITE_USE_FAKE === 'true';
 
-export function imageUrls(source: Source) {
-  if (source === 'fake') return { a: '/fake/a.png', b: '/fake/b.png' };
+export function imageUrls(source: Source): { a: string; b: string; diff: string | null } {
+  if (source === 'fake') return { a: '/fake/a.png', b: '/fake/b.png', diff: null };
   return {
     a: import.meta.env.VITE_IMAGE_A ?? `${API_URL}/images/a.png`,
     b: import.meta.env.VITE_IMAGE_B ?? `${API_URL}/images/b.png`,
+    // Used only if the browser can't build the difference itself (no CORS on the PNGs).
+    diff: import.meta.env.VITE_IMAGE_DIFF ?? `${API_URL}/images/diff.png`,
   };
 }
 
@@ -77,7 +79,7 @@ export const setStatus = (id: string, status: Status) =>
   call(`/candidates/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify({ status }) });
 
 // Detection can be slow: give it two minutes.
-export const runDetect = async () =>
+export const runDetect = async (threshold = 5.0) =>
   normalize(
     await call(
       '/detect',
@@ -87,7 +89,7 @@ export const runDetect = async () =>
           regionId: 'region-01',
           epochA: 'data/region-01/epoch_a.fits',
           epochB: 'data/region-01/epoch_b.fits',
-          threshold: 5.0,
+          threshold,
         }),
       },
       120000,
