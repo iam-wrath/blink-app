@@ -5,8 +5,8 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "rewrites": [
-    { "source": "/api/:path*", "destination": "https://YOUR-BLINK-API.onrender.com/api/:path*" },
-    { "source": "/data/cache/:path*", "destination": "https://YOUR-BLINK-API.onrender.com/data/cache/:path*" }
+    { "source": "/api/:path*", "destination": "https://blink-api-00u8.onrender.com" },
+    { "source": "/data/cache/:path*", "destination": "https://blink-api-00u8.onrender.com" }
   ],
   "headers": [
     {
