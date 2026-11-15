@@ -1,39 +1,35 @@
-// Shapes from the team contract (Blink step-by-step guide, page 3),
-// plus `status`, which Kwaku's API adds for confirm/reject.
+// Shapes from the frames contract (GET /api/frames, GET /api/targets; see contract/).
 
-export type Status = 'pending' | 'confirmed' | 'rejected';
+export type FrameMode = 'raw' | 'diff';
 
-export interface KnownMatch {
+export interface Target {
   name: string;
-  separationArcsec: number;
+  ra: number;
+  dec: number;
+  fov: number;
+  detector?: string; // band the target shows up best in (optional)
 }
 
-export interface Candidate {
+export interface FrameQuery {
+  ra: number;
+  dec: number;
+  fov: number;
+  detector: string;
+  mode: FrameMode;
+}
+
+export interface Frame {
   id: string;
-  x: number; // pixel position in the PNG, (0,0) = top-left
-  y: number;
-  ra: number; // degrees
-  dec: number; // degrees
-  fluxDiff: number;
-  confidence: number; // 0 to 1
-  knownMatch: KnownMatch | null;
-  status: Status;
+  obsTime: string;
+  detector: string;
+  wavelengthUm: number;
+  release: string;
+  flags: number;
+  png: string; // relative to the API origin, e.g. data/cache/....png
 }
 
-export interface DetectResponse {
-  regionId: string;
+export interface FramesResponse {
+  query: { ra: number; dec: number; fovDeg: number; detector: string; mode: FrameMode };
   imageSize: { width: number; height: number };
-  images?: { epochA: string; epochB: string };
-  candidates: Candidate[];
-  counts: { total: number; matchedKnown: number; unmatched: number };
+  frames: Frame[];
 }
-
-export interface Summary {
-  total: number;
-  matchedKnown: number;
-  unmatched: number;
-  confirmed: number;
-  rejected: number;
-}
-
-export type Source = 'api' | 'fake';

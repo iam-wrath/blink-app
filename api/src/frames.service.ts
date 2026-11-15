@@ -1,4 +1,4 @@
-import { BadGatewayException, GatewayTimeoutException, Injectable } from '@nestjs/common';
+import { BadGatewayException, BadRequestException, GatewayTimeoutException, Injectable } from '@nestjs/common';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { PrismaService } from './prisma.service.js';
@@ -37,8 +37,15 @@ export class FramesService {
       }
       throw new BadGatewayException('The frame service is not reachable, and this search is not cached yet.');
     }
-    if (!r.ok) throw new BadGatewayException(`The frame service returned an error (${r.status}).`);
+    if (!r.ok) {
+      // pass the frame service's own message through (FastAPI puts it in "detail")
+      const body = await r.json().catch(() => null);
+      const detail = typeof body?.detail === 'string' ? body.detail : `The frame service returned an error (${r.status}).`;
+      throw r.status === 400 ? new BadRequestException(detail) : new BadGatewayException(detail);
+    }
     const data = await r.json();
+    // don't cache "no images" answers: a later data release (or IRSA coming back online) may have some
+    if (!data?.frames?.length) return data;
 
     await this.prisma.searchCache.upsert({
       where: { key },
