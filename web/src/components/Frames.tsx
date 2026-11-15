@@ -1,7 +1,18 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { getFrames, getTargets, pngUrl } from '../api';
 import type { FrameMode, FrameQuery, FramesResponse, Target } from '../types';
+import { motion } from 'motion/react';
 import { Btn, Check } from './ui';
+
+const Icon = ({ d }: { d: string }) => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+    <path d={d} />
+  </svg>
+);
+const PLAY = 'M4 2.5v11l9-5.5z';
+const PAUSE = 'M3.5 2.5h3v11h-3zM9.5 2.5h3v11h-3z';
+const PREV = 'M11.5 2.5v11L4 8z';
+const NEXT = 'M4.5 2.5v11L12 8z';
 
 // Red cross-hair with an open centre at the searched position, so the target itself stays visible.
 // Its position is where the target was at the catalogue epoch; a fast mover drifts out of the gap over the year.
@@ -11,7 +22,7 @@ function TargetMarker({ w, h, at }: { w: number; h: number; at?: { x: number; y:
   const len = Math.max(w, h) * 0.07;
   const sw = Math.max(w, h) * 0.006;
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} aria-hidden="true" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}>
+    <svg viewBox={`0 0 ${w} ${h}`} aria-hidden="true">
       <g stroke="#ff3b30" strokeWidth={sw} strokeLinecap="round">
         <line x1={x - gap - len} y1={y} x2={x - gap} y2={y} />
         <line x1={x + gap} y1={y} x2={x + gap + len} y2={y} />
@@ -162,9 +173,9 @@ export function FramesPage() {
             ))}
           </select>
         </label>
-        {field('ra', 'Right Ascension (RA)', 'degrees, 0 to 360')}
-        {field('dec', 'Declination (Dec)', 'degrees, −90 to 90')}
-        {field('fov', 'Field of view', 'degrees; larger is slower')}
+        {field('ra', 'Right Ascension', '0 to 360°')}
+        {field('dec', 'Declination', '−90 to 90°')}
+        {field('fov', 'Field of view', 'degrees')}
         <label className="slider">
           Detector
           <select value={form.detector} onChange={(e) => setForm({ ...form, detector: e.target.value })}>
@@ -177,57 +188,59 @@ export function FramesPage() {
           <legend>Mode</legend>
           {(['raw', 'diff'] as FrameMode[]).map((m) => (
             <label key={m} className="check">
-              <input type="radio" name="mode" checked={form.mode === m} onChange={() => setForm({ ...form, mode: m })} /> {m === 'raw' ? 'Raw' : 'Difference (minus first)'}
+              <input type="radio" name="mode" checked={form.mode === m} onChange={() => setForm({ ...form, mode: m })} /> {m === 'raw' ? 'Raw' : 'Difference'}
             </label>
           ))}
         </fieldset>
         <Check checked={form.coadd === 'visit'} onChange={(v) => setForm({ ...form, coadd: v ? 'visit' : 'none' })}>
-          Co-add each visit
+          Co-add each visit (less noise)
         </Check>
-        <span className="muted small" style={{ marginTop: -10 }}>
-          Adds the frames SPHEREx takes within a few hours into one: less noise, so faint targets show up; fewer frames.
-        </span>
-        <button type="submit" className="btn wide" disabled={loading}>
+        <button type="submit" className="btn primary wide" disabled={loading}>
           {loading ? 'Searching SPHEREx…' : 'Show frames'}
         </button>
-        <p className="muted small m0">Data: NASA SPHEREx via NASA/IPAC IRSA. The link in your address bar repeats this search.</p>
       </form>
 
-      <main className="main dark">
+      <main id="main" className="main">
         <div className="head">
           <h1>{named ? named.name : 'Time-lapse'}</h1>
           {resp && (
-            <span className="muted">
+            <span className="mono">
               {n} {resp.query.coadd === 'visit' ? 'co-added visits' : 'frames'} · {resp.query.detector} · {resp.query.mode}
             </span>
           )}
         </div>
-        <p className="warn m0" role="status" aria-live="polite">
-          {loading ? 'Fetching frames from the archive (first search of a spot can take a few minutes)…' : err}
+        <p className="status" role="status" aria-live="polite">
+          {loading ? 'Fetching frames. A new spot can take a few minutes.' : err}
         </p>
+        {loading && <div className="loading-bar" aria-hidden="true" />}
+        {!resp && !loading && !err && (
+          <p className="empty">Choose a target, or enter coordinates.</p>
+        )}
 
         {frame && resp && (
-          <div className="cols">
+          <motion.div className="cols" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35, ease: [0.2, 0.7, 0.2, 1] }}>
             <div className="col-img">
-              <div style={{ position: 'relative', lineHeight: 0 }}>
+              <div className="stage">
                 <img
                   src={pngUrl(frame.png)}
                   alt={`SPHEREx frame ${idx + 1} of ${n}, ${fmtDate(frame.obsTime)}`}
                   width={resp.imageSize.width}
                   height={resp.imageSize.height}
-                  style={{ width: '100%', height: 'auto', border: '1px solid #555', background: '#111' }}
                 />
                 {showMarker && <TargetMarker w={resp.imageSize.width} h={resp.imageSize.height} at={resp.target} />}
               </div>
               <div className="row-wrap">
                 <Btn onClick={() => setPlaying(!playing)} on={playing} disabled={n < 2}>
+                  <Icon d={playing ? PAUSE : PLAY} />
                   {playing ? 'Pause' : 'Play'}
                 </Btn>
                 <Btn small onClick={() => { setPlaying(false); setIdx((idx - 1 + n) % n); }} disabled={n < 2}>
-                  ◀ Prev
+                  <Icon d={PREV} />
+                  Prev
                 </Btn>
                 <Btn small onClick={() => { setPlaying(false); setIdx((idx + 1) % n); }} disabled={n < 2}>
-                  Next ▶
+                  Next
+                  <Icon d={NEXT} />
                 </Btn>
                 <label className="check small">
                   Speed
@@ -244,16 +257,12 @@ export function FramesPage() {
                 </Check>
               </div>
               <label className="slider">
-                Date: {fmtDate(frame.obsTime)} (frame {idx + 1} of {n})
+                {fmtDate(frame.obsTime)} · {idx + 1} of {n}
                 <input type="range" min={0} max={n - 1} step={1} value={idx} onChange={(e) => { setPlaying(false); setIdx(Number(e.target.value)); }} />
               </label>
-              <p className="muted small m0">
-                {fmtDate(resp.frames[0].obsTime)} → {fmtDate(resp.frames[n - 1].obsTime)}
-              </p>
             </div>
 
             <div className="col-info">
-              <h2>This frame</h2>
               <table className="kv">
                 <tbody>
                   <tr><td>Date</td><td>{fmtDate(frame.obsTime)}</td></tr>
@@ -266,11 +275,10 @@ export function FramesPage() {
                 </tbody>
               </table>
               <p className="muted small m0">
-                Wavelengths in this series: {Math.min(...waves).toFixed(3)}–{Math.max(...waves).toFixed(3)} µm. SPHEREx sees a slightly different
-                infrared colour on each visit, so some brightness changes are colour, not motion.
+                Wavelength varies by frame ({Math.min(...waves).toFixed(2)}–{Math.max(...waves).toFixed(2)} µm), so some changes are colour, not motion.
               </p>
             </div>
-          </div>
+          </motion.div>
         )}
       </main>
     </>

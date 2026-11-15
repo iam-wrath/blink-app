@@ -24,6 +24,9 @@ them like a little video, so things that move or change brightness stand out.
 Challenge targets (presets): WISE 0855 (D6), Barnard's Star, Epsilon Indi B, RW Aurigae, R Draconis (D2).
 Positions are moved to the SPHEREx epoch using proper motion; sources in `docs/DATA.md`.
 
+The site opens on a landing page (a three.js sky sphere, a live Barnard's Star loop and the five targets);
+the viewer is at `/#/explore`, and any link with `?ra=&dec=` opens the viewer directly.
+
 ## Quick start (Windows)
 
 ```powershell
