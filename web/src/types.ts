@@ -8,7 +8,10 @@ export interface Target {
   dec: number;
   fov: number;
   detector?: string; // band the target shows up best in (optional)
+  coadd?: CoaddMode; // co-add each visit by default for this target (optional; faint targets)
 }
+
+export type CoaddMode = 'none' | 'visit';
 
 export interface FrameQuery {
   ra: number;
@@ -16,6 +19,7 @@ export interface FrameQuery {
   fov: number;
   detector: string;
   mode: FrameMode;
+  coadd: CoaddMode;
 }
 
 export interface Frame {
@@ -26,10 +30,11 @@ export interface Frame {
   release: string;
   flags: number;
   png: string; // relative to the API origin, e.g. data/cache/....png
+  nFrames?: number; // only when co-adding: how many frames were added into this one
 }
 
 export interface FramesResponse {
-  query: { ra: number; dec: number; fovDeg: number; detector: string; mode: FrameMode };
+  query: { ra: number; dec: number; fovDeg: number; detector: string; mode: FrameMode; coadd?: CoaddMode };
   imageSize: { width: number; height: number };
   target?: { x: number; y: number }; // searched position in PNG pixels (origin top-left)
   frames: Frame[];

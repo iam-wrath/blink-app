@@ -11,7 +11,7 @@ const DETECTOR_TIMEOUT_MS = Number(process.env.DETECTOR_TIMEOUT_MS ?? 300_000);
 export class FramesService {
   constructor(private prisma: PrismaService) {}
 
-  async frames(ra: number, dec: number, fov: number, detector: string, mode: string) {
+  async frames(ra: number, dec: number, fov: number, detector: string, mode: string, coadd = 'none') {
     // testing switch: returns the fake example, no detector needed
     if (process.env.USE_FAKE === 'true') {
       return JSON.parse(
@@ -19,7 +19,8 @@ export class FramesService {
       );
     }
 
-    const key = [ra.toFixed(4), dec.toFixed(4), fov, detector, mode].join('|');
+    // coadd is only added to the key when used, so searches cached before it existed stay valid
+    const key = [ra.toFixed(4), dec.toFixed(4), fov, detector, mode, ...(coadd === 'none' ? [] : [coadd])].join('|');
     const hit = await this.prisma.searchCache.findUnique({ where: { key } });
     if (hit) return JSON.parse(hit.response);
 
@@ -28,7 +29,7 @@ export class FramesService {
       r = await fetch(`${DETECTOR_URL}/frames`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ra, dec, fovDeg: fov, detector, mode }),
+        body: JSON.stringify({ ra, dec, fovDeg: fov, detector, mode, coadd }),
         signal: AbortSignal.timeout(DETECTOR_TIMEOUT_MS),
       });
     } catch (e) {

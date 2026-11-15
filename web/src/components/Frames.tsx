@@ -27,7 +27,7 @@ function TargetMarker({ w, h, at }: { w: number; h: number; at?: { x: number; y:
 // The search is mirrored in the URL (?ra=&dec=&fov=&detector=&mode=) so it can be shared or embedded.
 
 const DETECTORS = ['D1', 'D2', 'D3', 'D4', 'D5', 'D6'];
-const DEFAULT: FrameQuery = { ra: 133.7951, dec: -7.2451, fov: 0.1, detector: 'D2', mode: 'raw' };
+const DEFAULT: FrameQuery = { ra: 133.7951, dec: -7.2451, fov: 0.1, detector: 'D2', mode: 'raw', coadd: 'none' };
 
 function queryFromUrl(): FrameQuery | null {
   const p = new URLSearchParams(window.location.search);
@@ -42,11 +42,13 @@ function queryFromUrl(): FrameQuery | null {
     fov: Number.isFinite(fov) && fov > 0 ? fov : DEFAULT.fov,
     detector: DETECTORS.includes(det) ? det : DEFAULT.detector,
     mode: p.get('mode') === 'diff' ? 'diff' : 'raw',
+    coadd: p.get('coadd') === 'visit' ? 'visit' : 'none',
   };
 }
 
 function writeUrl(q: FrameQuery) {
   const p = new URLSearchParams({ ra: String(q.ra), dec: String(q.dec), fov: String(q.fov), detector: q.detector, mode: q.mode });
+  if (q.coadd === 'visit') p.set('coadd', 'visit');
   window.history.replaceState(null, '', `${window.location.pathname}?${p}${window.location.hash}`);
 }
 
@@ -60,6 +62,7 @@ export function FramesPage() {
     fov: String((fromUrl ?? DEFAULT).fov),
     detector: (fromUrl ?? DEFAULT).detector,
     mode: (fromUrl ?? DEFAULT).mode,
+    coadd: (fromUrl ?? DEFAULT).coadd,
   });
   const [targets, setTargets] = useState<Target[]>([]);
   const [resp, setResp] = useState<FramesResponse | null>(null);
@@ -115,7 +118,7 @@ export function FramesPage() {
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    const q: FrameQuery = { ra: parseFloat(form.ra), dec: parseFloat(form.dec), fov: parseFloat(form.fov), detector: form.detector, mode: form.mode };
+    const q: FrameQuery = { ra: parseFloat(form.ra), dec: parseFloat(form.dec), fov: parseFloat(form.fov), detector: form.detector, mode: form.mode, coadd: form.coadd };
     if (!Number.isFinite(q.ra) || !Number.isFinite(q.dec) || !Number.isFinite(q.fov) || q.fov <= 0) {
       setErr('RA, Dec and field of view must be numbers (degrees), and the field of view must be above 0.');
       return;
@@ -127,8 +130,9 @@ export function FramesPage() {
     const t = targets.find((x) => x.name === name);
     if (!t) return;
     const detector = t.detector && DETECTORS.includes(t.detector) ? t.detector : form.detector;
-    const q: FrameQuery = { ra: t.ra, dec: t.dec, fov: t.fov, detector, mode: form.mode };
-    setForm({ ...form, ra: String(t.ra), dec: String(t.dec), fov: String(t.fov), detector });
+    const coadd = t.coadd === 'visit' ? 'visit' : 'none';   // faint targets (WISE 0855) come with co-adding on
+    const q: FrameQuery = { ra: t.ra, dec: t.dec, fov: t.fov, detector, mode: form.mode, coadd };
+    setForm({ ...form, ra: String(t.ra), dec: String(t.dec), fov: String(t.fov), detector, coadd });
     search(q);
   };
 
@@ -177,6 +181,12 @@ export function FramesPage() {
             </label>
           ))}
         </fieldset>
+        <Check checked={form.coadd === 'visit'} onChange={(v) => setForm({ ...form, coadd: v ? 'visit' : 'none' })}>
+          Co-add each visit
+        </Check>
+        <span className="muted small" style={{ marginTop: -10 }}>
+          Adds the frames SPHEREx takes within a few hours into one: less noise, so faint targets show up; fewer frames.
+        </span>
         <button type="submit" className="btn wide" disabled={loading}>
           {loading ? 'Searching SPHEREx…' : 'Show frames'}
         </button>
@@ -186,7 +196,11 @@ export function FramesPage() {
       <main className="main dark">
         <div className="head">
           <h1>{named ? named.name : 'Time-lapse'}</h1>
-          {resp && <span className="muted">{n} frames · {resp.query.detector} · {resp.query.mode}</span>}
+          {resp && (
+            <span className="muted">
+              {n} {resp.query.coadd === 'visit' ? 'co-added visits' : 'frames'} · {resp.query.detector} · {resp.query.mode}
+            </span>
+          )}
         </div>
         <p className="warn m0" role="status" aria-live="polite">
           {loading ? 'Fetching frames from the archive (first search of a spot can take a few minutes)…' : err}
@@ -247,6 +261,7 @@ export function FramesPage() {
                   <tr><td>Detector</td><td>{frame.detector}</td></tr>
                   <tr><td>Release</td><td>{frame.release || '—'}</td></tr>
                   <tr><td>Flags</td><td>{frame.flags}</td></tr>
+                  {frame.nFrames !== undefined && <tr><td>Frames co-added</td><td>{frame.nFrames}</td></tr>}
                   <tr><td>Frame id</td><td className="small">{frame.id}</td></tr>
                 </tbody>
               </table>

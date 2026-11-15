@@ -23,7 +23,7 @@ sys.path.insert(0, HERE)  # irsa.py and build_frames.py live next to this file
 os.chdir(ROOT)  # irsa.py uses paths relative to the project root (data/raw, contract/targets.json)
 
 import irsa  # noqa: E402
-from build_frames import SOURCE_BIT, load, render, upscale_for  # noqa: E402
+from build_frames import SOURCE_BIT, load, render, upscale_for, visits  # noqa: E402
 
 CACHE_DIR = os.path.join("data", "cache", "frames")
 
@@ -36,6 +36,8 @@ class FramesRequest(BaseModel):
     fovDeg: float = 0.1
     detector: str = "D2"
     mode: Literal["raw", "diff"] = "raw"
+    # "visit": co-add the frames of each visit (taken within ~2 days) into one, for faint targets
+    coadd: Literal["none", "visit"] = "none"
 
 
 @app.get("/health")
@@ -52,7 +54,7 @@ def frames(req: FramesRequest):
     if not (0 <= req.ra <= 360 and -90 <= req.dec <= 90 and 0 < req.fovDeg <= 2):
         raise HTTPException(400, "ra must be 0..360, dec -90..90, fovDeg above 0 and at most 2")
 
-    query = {"ra": req.ra, "dec": req.dec, "fovDeg": req.fovDeg, "detector": det, "mode": req.mode}
+    query = {"ra": req.ra, "dec": req.dec, "fovDeg": req.fovDeg, "detector": det, "mode": req.mode, "coadd": req.coadd}
     # same as irsa.find_cutouts, but tells "IRSA is down" apart from "IRSA has no images here"
     rows = None
     if os.environ.get("BLINK_OFFLINE") != "1":
@@ -77,10 +79,13 @@ def frames(req: FramesRequest):
     if not good:
         return {"query": query, "imageSize": {"width": 0, "height": 0}, "frames": []}
 
-    key = hashlib.sha1(f"{req.ra:.4f}|{req.dec:.4f}|{req.fovDeg}|{det}|{req.mode}".encode()).hexdigest()[:10]
+    key_src = f"{req.ra:.4f}|{req.dec:.4f}|{req.fovDeg}|{det}|{req.mode}" + ("" if req.coadd == "none" else f"|{req.coadd}")
+    key = hashlib.sha1(key_src.encode()).hexdigest()[:10]
     outdir = os.path.join(CACHE_DIR, key)
     ref = good[0][1]
-    paths = render([f for _, f in good], outdir, prefix=f"{key}_")
+    # one output frame per input frame, or per visit when co-adding
+    groups = visits([r["obsTime"] for r, _ in good]) if req.coadd == "visit" else [[i] for i in range(len(good))]
+    paths = render([f for _, f in good], outdir, prefix=f"{key}_", groups=groups if req.coadd == "visit" else None)
     s = upscale_for(ref["data"].shape)   # PNGs are enlarged s times
     ny, nx = ref["data"].shape
     w, h = nx * s, ny * s
@@ -90,17 +95,33 @@ def frames(req: FramesRequest):
     target = {"x": round((float(tx) + 0.5) * s, 1), "y": round((ny - 0.5 - float(ty)) * s, 1)}
 
     out = []
-    for i, ((row, f), (raw_p, diff_p)) in enumerate(zip(good, paths), start=1):
+    for i, (g, (raw_p, diff_p)) in enumerate(zip(groups, paths), start=1):
+        members = [good[k] for k in g]
         png = raw_p if req.mode == "raw" else diff_p
-        wl = row.get("wavelengthUm") or f["wave"]
-        out.append({
-            "id": f"{key}-{i:03d}",
-            "obsTime": row["obsTime"],
-            "detector": det,
-            "wavelengthUm": round(float(wl), 3),
-            "release": row.get("release") or "",
+        wls = [float(row.get("wavelengthUm") or f["wave"]) for row, f in members]
+        flags = 0
+        for row, _ in members:
             # FLAGS bits at the target pixel; bit 21 (source present) is set almost everywhere and is not a problem
-            "flags": int(row.get("flags") or 0) & ~SOURCE_BIT,
+            flags |= int(row.get("flags") or 0) & ~SOURCE_BIT
+        frame = {
+            "id": f"{key}-{i:03d}",
+            "obsTime": mean_time([row["obsTime"] for row, _ in members]),
+            "detector": det,
+            "wavelengthUm": round(sum(wls) / len(wls), 3),   # mean when co-added
+            "release": ", ".join(sorted({row.get("release") or "" for row, _ in members} - {""})),
+            "flags": flags,   # any flag set in any co-added frame
             "png": png.replace(os.sep, "/"),
-        })
+        }
+        if req.coadd != "none":
+            frame["nFrames"] = len(members)   # how many frames were co-added into this one
+        out.append(frame)
     return {"query": query, "imageSize": {"width": int(w), "height": int(h)}, "target": target, "frames": out}
+
+
+def mean_time(iso_times):
+    """Mean of ISO times ('...Z'), as an ISO time with Z (the time itself when there is only one)."""
+    if len(iso_times) == 1:
+        return iso_times[0]
+    from astropy.time import Time
+    t = Time([s.rstrip("Z") for s in iso_times], format="isot", scale="utc")
+    return Time(t.mjd.mean(), format="mjd", scale="utc").isot[:19] + "Z"

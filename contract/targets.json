@@ -4,7 +4,8 @@
     "ra": 133.76044,
     "dec": -7.24229,
     "fov": 0.1,
-    "detector": "D6"
+    "detector": "D6",
+    "coadd": "visit"
   },
   {
     "name": "Barnard's Star",

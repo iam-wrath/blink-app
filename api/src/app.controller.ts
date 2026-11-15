@@ -14,6 +14,7 @@ export class AppController {
     @Query('fov') fov = '0.1',
     @Query('detector') detector = 'D2',
     @Query('mode') mode = 'raw',
+    @Query('coadd') coadd = 'none',
   ) {
     const r = parseFloat(ra);
     const d = parseFloat(dec);
@@ -24,7 +25,10 @@ export class AppController {
     if (mode !== 'raw' && mode !== 'diff') {
       throw new BadRequestException('mode must be raw or diff');
     }
-    return this.svc.frames(r, d, f, detector, mode);
+    if (coadd !== 'none' && coadd !== 'visit') {
+      throw new BadRequestException('coadd must be none or visit');
+    }
+    return this.svc.frames(r, d, f, detector, mode, coadd);
   }
 
   @Get('targets')

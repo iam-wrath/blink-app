@@ -12,7 +12,12 @@ them like a little video, so things that move or change brightness stand out.
   visible; a fast mover like Barnard's Star drifts within it over the year. Toggle with "Mark target".
 - Images: background subtracted, asinh brightness stretch, flagged pixels filled (saturated star cores
   stay bright), smoothly enlarged to ~470 px. SPHEREx pixels are ~6″, so a 0.1° cutout is only ~60 pixels.
-- Metadata for each frame: date, wavelength, detector, data release, quality flags.
+- **Co-add each visit** (`coadd=visit` in the URL): SPHEREx images a patch several times within a few
+  hours, then returns weeks later. Co-adding averages the aligned frames of each visit into one, cutting
+  the noise by about √n so faint targets show up (WISE 0855 at D6: signal-to-noise at the target goes from
+  ~2–8 per frame to up to ~11 per visit). Motion within a visit is negligible, so movers stay sharp.
+  On by default for the WISE 0855 preset.
+- Metadata for each frame: date, wavelength, detector, data release, quality flags (and frames co-added).
 - Shareable / embeddable: the search is in the URL, e.g.
   `http://localhost:5173/?ra=269.44636&dec=4.76705&fov=0.2&detector=D2&mode=raw`
 

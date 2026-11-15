@@ -18,7 +18,7 @@ export const getTargets = () => call<Target[]>('/targets');
 
 // Live IRSA searches can be slow: wait a little longer than the API's own 5-minute limit.
 export async function getFrames(q: FrameQuery): Promise<FramesResponse> {
-  const qs = new URLSearchParams({ ra: String(q.ra), dec: String(q.dec), fov: String(q.fov), detector: q.detector, mode: q.mode });
+  const qs = new URLSearchParams({ ra: String(q.ra), dec: String(q.dec), fov: String(q.fov), detector: q.detector, mode: q.mode, coadd: q.coadd });
   let res: Response;
   try {
     res = await fetch(`${API_URL}/frames?${qs}`, { signal: AbortSignal.timeout(330_000) });

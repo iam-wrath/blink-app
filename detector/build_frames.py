@@ -81,14 +81,31 @@ def save_png(arr, path, lo, hi, fill=0.0, scale=1, symmetric=False):
     im.save(path)
 
 
+def visits(dates, max_days=2.0):
+    """Group date-sorted ISO dates into visits: frames within max_days of the visit's first frame.
+    SPHEREx sees a patch several times within hours, then comes back weeks or months later.
+    Returns a list of index lists."""
+    from astropy.time import Time
+    mjd = [Time(d.rstrip("Z")).mjd for d in dates]
+    groups = [[0]] if mjd else []
+    for i in range(1, len(mjd)):
+        if mjd[i] - mjd[groups[-1][0]] <= max_days:
+            groups[-1].append(i)
+        else:
+            groups.append([i])
+    return groups
+
+
 def upscale_for(shape):
     """Whole-number enlargement so the PNG is about DISPLAY_PX across (1 = no enlargement)."""
     return max(1, min(8, round(DISPLAY_PX / max(shape))))
 
 
-def render(fr, outdir, prefix=""):
+def render(fr, outdir, prefix="", groups=None):
     """Align frames (already loaded with load() and sorted by date) to the first one and save
     <prefix>raw_NNN.png and <prefix>diff_NNN.png in outdir. Returns the (raw, diff) path pairs, in order.
+    groups: optional list of index lists (e.g. from visits()); each group is co-added (averaged after
+    alignment) into one output frame, which improves signal-to-noise for faint targets.
     PNGs are enlarged upscale_for(first frame's shape) times.
     Used by build_frames.py (below) and by the frame service (main.py)."""
     os.makedirs(outdir, exist_ok=True)
@@ -101,6 +118,8 @@ def render(fr, outdir, prefix=""):
         aligned.append(a)
     # remove each frame's own background level, so brightness steps don't flicker
     aligned = [a - np.nanmedian(a) for a in aligned]
+    if groups:   # co-add: average the aligned frames of each group (noise drops by about sqrt(n))
+        aligned = [np.nanmean(np.stack([aligned[i] for i in g]), axis=0) for g in groups]
     # what we show: bad pixels filled, very light smoothing against single-pixel noise
     shown = [ndimage.gaussian_filter(fill_masked(a), 0.6) for a in aligned]
     # ONE shared brightness scale for all raw frames: background (median) is black

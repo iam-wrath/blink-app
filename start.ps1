@@ -47,12 +47,13 @@ if ($Prebake) {
     $inv = [Globalization.CultureInfo]::InvariantCulture                # always a dot as decimal separator
     foreach ($t in $targets) {
         $det = if ($t.detector) { $t.detector } else { 'D2' }
+        $coadd = if ($t.coadd) { $t.coadd } else { 'none' }   # same defaults the web app uses for this preset
         foreach ($mode in 'raw', 'diff') {
-            $url = 'http://localhost:3000/api/frames?ra={0}&dec={1}&fov={2}&detector={3}&mode={4}' -f `
-                $t.ra.ToString($inv), $t.dec.ToString($inv), $t.fov.ToString($inv), $det, $mode
+            $url = 'http://localhost:3000/api/frames?ra={0}&dec={1}&fov={2}&detector={3}&mode={4}&coadd={5}' -f `
+                $t.ra.ToString($inv), $t.dec.ToString($inv), $t.fov.ToString($inv), $det, $mode, $coadd
             try {
                 $r = Invoke-RestMethod $url -TimeoutSec 600
-                Write-Host ('{0,-15} {1} {2,-4}: {3} frames' -f $t.name, $det, $mode, $r.frames.Count)
+                Write-Host ('{0,-15} {1} {2,-4} coadd={3}: {4} frames' -f $t.name, $det, $mode, $coadd, $r.frames.Count)
             } catch {
                 Write-Warning "$($t.name) $mode failed: $($_.Exception.Message)"
             }
