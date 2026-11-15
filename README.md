@@ -22,7 +22,7 @@ them like a little video, so things that move or change brightness stand out.
   `http://localhost:5173/?ra=269.44636&dec=4.76705&fov=0.2&detector=D2&mode=raw`
 
 Challenge targets (presets): WISE 0855 (D6), Barnard's Star, Epsilon Indi B, RW Aurigae, R Draconis (D2).
-Positions are moved to the SPHEREx epoch using proper motion; sources in `docs/DATA.md`.
+Positions are moved to the SPHEREx epoch (2025.6) using proper motion.
 
 The site opens on a landing page (a three.js sky sphere, a live Barnard's Star loop and the five targets);
 the viewer is at `/#/explore`, and any link with `?ra=&dec=` opens the viewer directly.
@@ -143,7 +143,6 @@ seed/       the five targets' cached searches and PNGs, loaded by the API on sta
 deploy/     nginx config for the Docker setup (render.yaml is at the root)
 scripts/    export_seed.py (refreshes seed/)
 data/       downloaded FITS and generated PNGs (not in git)
-docs/       data sources, archive query results, data notes
 ```
 
 ## Data and credit

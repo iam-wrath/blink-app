@@ -1,8 +1,0 @@
-{
-  "query": { "ra": 133.7951, "dec": -7.2451, "fovDeg": 0.1, "detector": "D2", "mode": "raw" },
-  "imageSize": { "width": 58, "height": 58 },
-  "frames": [
-    { "id": "f-001", "obsTime": "2025-08-14T03:21:00Z", "detector": "D2", "wavelengthUm": 1.35,
-      "release": "QR3", "flags": 0, "png": "data/cache/f-001.png" }
-  ]
-}

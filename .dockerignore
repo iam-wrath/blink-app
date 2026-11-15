@@ -14,4 +14,3 @@ data
 !**/.env.example
 **/*.fits
 **/*.tsbuildinfo
-docs
