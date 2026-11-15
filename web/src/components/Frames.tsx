@@ -63,6 +63,17 @@ function writeUrl(q: FrameQuery) {
   window.history.replaceState(null, '', `${window.location.pathname}?${p}${window.location.hash}`);
 }
 
+// Which part of the spectrum a wavelength is in (astronomers' ranges), and its frequency.
+// SPHEREx covers 0.75–5 µm, which is all near-infrared.
+function bandName(um: number) {
+  if (um < 0.38) return 'Ultraviolet';
+  if (um < 0.75) return 'Visible light';
+  if (um < 5) return 'Near-infrared';
+  if (um < 25) return 'Mid-infrared';
+  return 'Far-infrared';
+}
+const frequencyTHz = (um: number) => 299.792458 / um; // c / wavelength
+
 const fmtDate = (iso: string) => iso.replace('T', ' ').replace(/(:\d\d)(\.\d+)?Z?$/, '$1 UTC');
 
 export function FramesPage() {
@@ -267,6 +278,8 @@ export function FramesPage() {
                 <tbody>
                   <tr><td>Date</td><td>{fmtDate(frame.obsTime)}</td></tr>
                   <tr><td>Wavelength</td><td>{frame.wavelengthUm.toFixed(3)} µm</td></tr>
+                  <tr><td>Band</td><td>{bandName(frame.wavelengthUm)}</td></tr>
+                  <tr><td>Frequency</td><td>{frequencyTHz(frame.wavelengthUm).toFixed(1)} THz</td></tr>
                   <tr><td>Detector</td><td>{frame.detector}</td></tr>
                   <tr><td>Release</td><td>{frame.release || '—'}</td></tr>
                   <tr><td>Flags</td><td>{frame.flags}</td></tr>

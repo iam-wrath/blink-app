@@ -1,19 +1,17 @@
-/* Blink: quiet, neutral UI with one blue accent, in light and dark.
-   The theme is set on <html data-theme="light|dark"> (see index.html and App.tsx).
-   Sky images and the hero sky are always shown on black. Red is reserved for the target cross-hair. */
+/* Blink: quiet, dark UI with one blue accent. Red is reserved for the target cross-hair. */
 :root {
-  --bg: #ffffff;
-  --surface: #f5f5f7;
-  --surface-2: #e8e8ed;
-  --line: #d2d2d7;
-  --line-strong: #86868b;
-  --text: #1d1d1f;
-  --muted: #6e6e73;
+  --bg: #000000;
+  --surface: #161617;
+  --surface-2: #2a2a2d;
+  --line: #2c2c2e;
+  --line-strong: #6e6e73;
+  --text: #f5f5f7;
+  --muted: #a1a1a6;
   --accent: #0071e3;
-  --accent-hover: #0077ed;
+  --accent-hover: #0a84ff;
   --on-accent: #ffffff;
-  --link: #0066cc;
-  --nav-bg: rgba(255, 255, 255, 0.8);
+  --link: #2997ff;
+  --nav-bg: rgba(0, 0, 0, 0.72);
   --target: #ff3b30;
 
   --font: 'IBM Plex Sans', -apple-system, 'Segoe UI', Arial, sans-serif;
@@ -27,20 +25,6 @@
   --wrap: 1040px;
   --fast: 180ms;
   --ease-out: cubic-bezier(0.2, 0.7, 0.2, 1);
-  color-scheme: light;
-}
-:root[data-theme='dark'] {
-  --bg: #000000;
-  --surface: #161617;
-  --surface-2: #2a2a2d;
-  --line: #2c2c2e;
-  --line-strong: #6e6e73;
-  --text: #f5f5f7;
-  --muted: #a1a1a6;
-  --accent: #0071e3;
-  --accent-hover: #0a84ff;
-  --link: #2997ff;
-  --nav-bg: rgba(0, 0, 0, 0.72);
   color-scheme: dark;
 }
 
@@ -73,8 +57,6 @@ button, select, input[type='checkbox'], input[type='radio'], input[type='range']
 .nav a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 var(--s3); color: var(--muted); font-size: 0.875rem; transition: color var(--fast) var(--ease-out); }
 .nav a:hover { color: var(--text); text-decoration: none; }
 .nav a[aria-current='page'] { color: var(--text); }
-.icon-btn { display: inline-grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--muted); transition: color var(--fast) var(--ease-out), background var(--fast) var(--ease-out); }
-.icon-btn:hover { color: var(--text); background: var(--surface); }
 .body { flex: 1; display: flex; flex-wrap: wrap; align-items: stretch; }
 
 /* ---------- buttons ---------- */
