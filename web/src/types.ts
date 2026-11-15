@@ -31,5 +31,6 @@ export interface Frame {
 export interface FramesResponse {
   query: { ra: number; dec: number; fovDeg: number; detector: string; mode: FrameMode };
   imageSize: { width: number; height: number };
+  target?: { x: number; y: number }; // searched position in PNG pixels (origin top-left)
   frames: Frame[];
 }

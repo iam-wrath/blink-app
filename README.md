@@ -8,6 +8,10 @@ them like a little video, so things that move or change brightness stand out.
 
 - **Raw** mode: the frames themselves, on one shared brightness scale.
 - **Difference** mode: each frame minus the first; grey = no change, white = brighter, black = fainter.
+- A red cross-hair marks the searched position (the target), with an open centre so the target stays
+  visible; a fast mover like Barnard's Star drifts within it over the year. Toggle with "Mark target".
+- Images: background subtracted, asinh brightness stretch, flagged pixels filled (saturated star cores
+  stay bright), smoothly enlarged to ~470 px. SPHEREx pixels are ~6″, so a 0.1° cutout is only ~60 pixels.
 - Metadata for each frame: date, wavelength, detector, data release, quality flags.
 - Shareable / embeddable: the search is in the URL, e.g.
   `http://localhost:5173/?ra=269.44636&dec=4.76705&fov=0.2&detector=D2&mode=raw`

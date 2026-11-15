@@ -31,18 +31,68 @@ def load(path):
                 "flagfrac": float(bad.mean())}
 
 
-def save_png(arr, path, lo, hi, fill=0.0):
-    """fill = grey level (0..1) for masked/missing pixels: black for raw, mid-grey for diff."""
-    img = np.clip((arr - lo) / (hi - lo + 1e-9), 0, 1)
+DISPLAY_PX = 480   # PNGs are smoothly enlarged to about this size (SPHEREx cutouts are only ~60 px across)
+
+
+def fill_masked(a):
+    """Fill flagged/missing pixels so they don't show as black holes:
+    small holes (bad pixels) get the local median, big holes (saturated star cores) the brightest neighbour."""
+    bad = ~np.isfinite(a)
+    if not bad.any() or bad.all():
+        return a
+    a = a.copy()
+    labels, n = ndimage.label(bad)
+    sizes = ndimage.sum(bad, labels, range(1, n + 1))
+    edge = np.unique(np.concatenate([labels[0], labels[-1], labels[:, 0], labels[:, -1]]))
+    big = np.isin(labels, 1 + np.flatnonzero(sizes > 4)) & ~np.isin(labels, edge[edge > 0])
+    small = bad & ~big & ~np.isin(labels, edge[edge > 0])
+    a[bad & ~big & ~small] = np.nanmedian(a)   # empty strips at the edges (after alignment): background
+    if small.any():
+        med = ndimage.median_filter(np.where(bad, np.nanmedian(a), a), size=3)
+        a[small] = med[small]
+    for _ in range(50):   # grow the brightest edge value inwards until big holes are filled
+        hole = ~np.isfinite(a)
+        if not hole.any():
+            break
+        grown = ndimage.maximum_filter(np.where(hole, -np.inf, a), size=3)
+        a = np.where(hole & np.isfinite(grown), grown, a)
+    return np.where(np.isfinite(a), a, np.nanmedian(a))
+
+
+def edge_gap(a):
+    """Missing pixels connected to the image border (no data there after alignment)."""
+    labels, _ = ndimage.label(~np.isfinite(a))
+    edge = np.unique(np.concatenate([labels[0], labels[-1], labels[:, 0], labels[:, -1]]))
+    return np.isin(labels, edge[edge > 0])
+
+
+def save_png(arr, path, lo, hi, fill=0.0, scale=1, symmetric=False):
+    """fill = grey level (0..1) for masked/missing pixels: black for raw, mid-grey for diff.
+    asinh stretch (faint detail visible, bright stars not blown out), then enlarged `scale` times (bicubic)."""
+    if symmetric:   # diff: -lim..lim -> 0..1 (linear), grey = no change
+        img = 0.5 + 0.5 * np.clip(arr / (hi + 1e-9), -1, 1)
+    else:
+        x = np.clip((arr - lo) / (hi - lo + 1e-9), 0, 1)
+        img = np.arcsinh(10 * x) / np.arcsinh(10)
     img = np.where(np.isfinite(arr), img, fill)
-    Image.fromarray((np.flipud(img) * 255).astype("uint8")).save(path)   # flip once, here only
+    im = Image.fromarray((np.flipud(img) * 255).astype("uint8"))   # flip once, here only (PNG origin top-left)
+    if scale > 1:
+        im = im.resize((im.width * scale, im.height * scale), Image.BICUBIC)
+    im.save(path)
+
+
+def upscale_for(shape):
+    """Whole-number enlargement so the PNG is about DISPLAY_PX across (1 = no enlargement)."""
+    return max(1, min(8, round(DISPLAY_PX / max(shape))))
 
 
 def render(fr, outdir, prefix=""):
     """Align frames (already loaded with load() and sorted by date) to the first one and save
     <prefix>raw_NNN.png and <prefix>diff_NNN.png in outdir. Returns the (raw, diff) path pairs, in order.
+    PNGs are enlarged upscale_for(first frame's shape) times.
     Used by build_frames.py (below) and by the frame service (main.py)."""
     os.makedirs(outdir, exist_ok=True)
+    scale = upscale_for(fr[0]["data"].shape)
     ref = fr[0]
     # align every frame to the first (earliest) one
     aligned = [ref["data"]]
@@ -51,24 +101,29 @@ def render(fr, outdir, prefix=""):
         aligned.append(a)
     # remove each frame's own background level, so brightness steps don't flicker
     aligned = [a - np.nanmedian(a) for a in aligned]
-    # ONE shared brightness scale for all raw frames
-    vals = np.concatenate([a[np.isfinite(a)] for a in aligned])
-    lo, hi = np.percentile(vals, [1, 99.5])
+    # what we show: bad pixels filled, very light smoothing against single-pixel noise
+    shown = [ndimage.gaussian_filter(fill_masked(a), 0.6) for a in aligned]
+    # ONE shared brightness scale for all raw frames: background (median) is black
+    vals = np.concatenate([s.ravel() for s in shown])
+    lo, hi = np.percentile(vals, [50, 99.8])
     # difference frames: each minus the first, symmetric scale
     diffs = []
-    for a in aligned:
-        d = a - aligned[0]
+    for a, s in zip(aligned, shown):
+        d = s - shown[0]
         # remove the slow background gradient (sky background differs between dates)
-        d = d - ndimage.median_filter(np.nan_to_num(d), size=31)
-        diffs.append(np.where(np.isfinite(a) & np.isfinite(aligned[0]), d, np.nan))
+        d = d - ndimage.median_filter(d, size=31)
+        # strips with no data at the edges (after alignment) show as grey; filled bad pixels are kept
+        diffs.append(np.where(edge_gap(a) | edge_gap(aligned[0]), np.nan, d))
     dv = np.concatenate([d[np.isfinite(d)] for d in diffs[1:]]) if len(diffs) > 1 else np.array([])
-    lim = np.percentile(np.abs(dv), 99) if dv.size else 1.0
+    # scale from the noise level (robust sigma), so noise stays a faint grain and only real changes stand out
+    sig = 1.4826 * np.median(np.abs(dv - np.median(dv))) if dv.size else 0.0
+    lim = max(np.percentile(np.abs(dv), 99.5) if dv.size else 0.0, 6 * sig) or 1.0
     paths = []
-    for i, (a, d) in enumerate(zip(aligned, diffs), start=1):
+    for i, (s, d) in enumerate(zip(shown, diffs), start=1):
         raw_p = os.path.join(outdir, f"{prefix}raw_{i:03d}.png")
         diff_p = os.path.join(outdir, f"{prefix}diff_{i:03d}.png")
-        save_png(a, raw_p, lo, hi)
-        save_png(d, diff_p, -lim, lim, fill=0.5)
+        save_png(s, raw_p, lo, hi, scale=scale)
+        save_png(d, diff_p, 0, lim, fill=0.5, scale=scale, symmetric=True)
         paths.append((raw_p, diff_p))
     return paths
 

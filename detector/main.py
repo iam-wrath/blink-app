@@ -23,7 +23,7 @@ sys.path.insert(0, HERE)  # irsa.py and build_frames.py live next to this file
 os.chdir(ROOT)  # irsa.py uses paths relative to the project root (data/raw, contract/targets.json)
 
 import irsa  # noqa: E402
-from build_frames import SOURCE_BIT, load, render  # noqa: E402
+from build_frames import SOURCE_BIT, load, render, upscale_for  # noqa: E402
 
 CACHE_DIR = os.path.join("data", "cache", "frames")
 
@@ -79,8 +79,15 @@ def frames(req: FramesRequest):
 
     key = hashlib.sha1(f"{req.ra:.4f}|{req.dec:.4f}|{req.fovDeg}|{det}|{req.mode}".encode()).hexdigest()[:10]
     outdir = os.path.join(CACHE_DIR, key)
+    ref = good[0][1]
     paths = render([f for _, f in good], outdir, prefix=f"{key}_")
-    h, w = good[0][1]["data"].shape
+    s = upscale_for(ref["data"].shape)   # PNGs are enlarged s times
+    ny, nx = ref["data"].shape
+    w, h = nx * s, ny * s
+    # where the searched position falls in the PNGs (every frame is aligned to the first one).
+    # FITS pixel (x, y), origin bottom-left -> PNG pixel, origin top-left, enlarged s times.
+    tx, ty = ref["wcs"].world_to_pixel_values(req.ra, req.dec)
+    target = {"x": round((float(tx) + 0.5) * s, 1), "y": round((ny - 0.5 - float(ty)) * s, 1)}
 
     out = []
     for i, ((row, f), (raw_p, diff_p)) in enumerate(zip(good, paths), start=1):
@@ -96,4 +103,4 @@ def frames(req: FramesRequest):
             "flags": int(row.get("flags") or 0) & ~SOURCE_BIT,
             "png": png.replace(os.sep, "/"),
         })
-    return {"query": query, "imageSize": {"width": int(w), "height": int(h)}, "frames": out}
+    return {"query": query, "imageSize": {"width": int(w), "height": int(h)}, "target": target, "frames": out}

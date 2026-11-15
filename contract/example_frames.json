@@ -1,6 +1,7 @@
 {
   "query": { "ra": 133.7951, "dec": -7.2451, "fovDeg": 0.1, "detector": "D2", "mode": "raw" },
-  "imageSize": { "width": 58, "height": 58 },
+  "imageSize": { "width": 464, "height": 464 },
+  "target": { "x": 232.0, "y": 232.0 },
   "frames": [
     { "id": "f-001", "obsTime": "2025-08-14T03:21:00Z", "detector": "D2", "wavelengthUm": 1.35, "release": "QR3", "flags": 0, "png": "data/cache/f-001.png" },
     { "id": "f-002", "obsTime": "2025-09-02T11:05:00Z", "detector": "D2", "wavelengthUm": 1.36, "release": "QR3", "flags": 0, "png": "data/cache/f-002.png" },

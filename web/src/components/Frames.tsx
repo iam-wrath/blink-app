@@ -1,7 +1,26 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { getFrames, getTargets, pngUrl } from '../api';
 import type { FrameMode, FrameQuery, FramesResponse, Target } from '../types';
-import { Btn } from './ui';
+import { Btn, Check } from './ui';
+
+// Red cross-hair with an open centre at the searched position, so the target itself stays visible.
+// Its position is where the target was at the catalogue epoch; a fast mover drifts out of the gap over the year.
+function TargetMarker({ w, h, at }: { w: number; h: number; at?: { x: number; y: number } }) {
+  const { x, y } = at ?? { x: w / 2, y: h / 2 };
+  const gap = Math.max(w, h) * 0.045;
+  const len = Math.max(w, h) * 0.07;
+  const sw = Math.max(w, h) * 0.006;
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} aria-hidden="true" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}>
+      <g stroke="#ff3b30" strokeWidth={sw} strokeLinecap="round">
+        <line x1={x - gap - len} y1={y} x2={x - gap} y2={y} />
+        <line x1={x + gap} y1={y} x2={x + gap + len} y2={y} />
+        <line x1={x} y1={y - gap - len} x2={x} y2={y - gap} />
+        <line x1={x} y1={y + gap} x2={x} y2={y + gap + len} />
+      </g>
+    </svg>
+  );
+}
 
 // Time-lapse viewer for the frames contract: enter RA/Dec (or pick a preset),
 // fetch every SPHEREx frame of that patch sorted by date, and play them like a little video.
@@ -49,6 +68,7 @@ export function FramesPage() {
   const [idx, setIdx] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [fps, setFps] = useState(2);
+  const [showMarker, setShowMarker] = useState(true);
 
   const search = useCallback(async (q: FrameQuery) => {
     writeUrl(q);
@@ -113,6 +133,8 @@ export function FramesPage() {
   };
 
   const frame = resp && n ? resp.frames[Math.min(idx, n - 1)] : null;
+  // name the target when the search is one of the presets
+  const named = resp ? targets.find((t) => Math.abs(t.ra - resp.query.ra) < 1e-3 && Math.abs(t.dec - resp.query.dec) < 1e-3) : undefined;
   const waves = resp?.frames.map((f) => f.wavelengthUm) ?? [];
   const field = (key: 'ra' | 'dec' | 'fov', label: string, hint: string) => (
     <label className="slider">
@@ -163,7 +185,7 @@ export function FramesPage() {
 
       <main className="main dark">
         <div className="head">
-          <h1>Time-lapse</h1>
+          <h1>{named ? named.name : 'Time-lapse'}</h1>
           {resp && <span className="muted">{n} frames · {resp.query.detector} · {resp.query.mode}</span>}
         </div>
         <p className="warn m0" role="status" aria-live="polite">
@@ -173,13 +195,16 @@ export function FramesPage() {
         {frame && resp && (
           <div className="cols">
             <div className="col-img">
-              <img
-                src={pngUrl(frame.png)}
-                alt={`SPHEREx frame ${idx + 1} of ${n}, ${fmtDate(frame.obsTime)}`}
-                width={resp.imageSize.width}
-                height={resp.imageSize.height}
-                style={{ width: '100%', height: 'auto', imageRendering: 'pixelated', border: '1px solid #555', background: '#111' }}
-              />
+              <div style={{ position: 'relative', lineHeight: 0 }}>
+                <img
+                  src={pngUrl(frame.png)}
+                  alt={`SPHEREx frame ${idx + 1} of ${n}, ${fmtDate(frame.obsTime)}`}
+                  width={resp.imageSize.width}
+                  height={resp.imageSize.height}
+                  style={{ width: '100%', height: 'auto', border: '1px solid #555', background: '#111' }}
+                />
+                {showMarker && <TargetMarker w={resp.imageSize.width} h={resp.imageSize.height} at={resp.target} />}
+              </div>
               <div className="row-wrap">
                 <Btn onClick={() => setPlaying(!playing)} on={playing} disabled={n < 2}>
                   {playing ? 'Pause' : 'Play'}
@@ -200,6 +225,9 @@ export function FramesPage() {
                     ))}
                   </select>
                 </label>
+                <Check checked={showMarker} onChange={setShowMarker}>
+                  <span className="small">Mark target</span>
+                </Check>
               </div>
               <label className="slider">
                 Date: {fmtDate(frame.obsTime)} (frame {idx + 1} of {n})
