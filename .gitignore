@@ -30,3 +30,8 @@ known_cache.json
 Thumbs.db
 .vscode/
 .idea/
+
+data/raw/
+data/cache/
+*.fits
+.venv/
