@@ -22,6 +22,12 @@ export class AppController {
     if (!Number.isFinite(r) || !Number.isFinite(d) || !Number.isFinite(f)) {
       throw new BadRequestException('ra, dec and fov must be numbers, e.g. ?ra=133.7951&dec=-7.2451&fov=0.1');
     }
+    if (r < 0 || r > 360 || d < -90 || d > 90 || f <= 0 || f > 2) {
+      throw new BadRequestException('ra must be 0 to 360, dec -90 to 90, and fov above 0 and at most 2 (degrees)');
+    }
+    if (typeof detector !== 'string' || !/^D[1-6]$/.test(detector)) {
+      throw new BadRequestException('detector must be one of D1 to D6');
+    }
     if (mode !== 'raw' && mode !== 'diff') {
       throw new BadRequestException('mode must be raw or diff');
     }

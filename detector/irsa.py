@@ -80,7 +80,9 @@ def _obsid_from_url(url):
     """level2_2025W20_2D_0234_3D3_spx_l2b-....fits -> '2025W20_2D_0234_3' (best effort)."""
     name = url.split("?")[0].rsplit("/", 1)[-1]
     m = re.search(r"level2_(\d{4}W\d+_\w+?_\d+_\d+)", name)
-    return m.group(1) if m else name.replace(".fits", "")
+    obsid = m.group(1) if m else name.replace(".fits", "")
+    # used in a file name: keep only safe characters (no path separators or "..")
+    return re.sub(r"[^A-Za-z0-9_-]", "_", obsid)[:80] or "frame"
 
 
 def _download(url, path, tries=3, timeout=120):

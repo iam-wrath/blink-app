@@ -1,4 +1,4 @@
-import { BadGatewayException, BadRequestException, GatewayTimeoutException, Injectable } from '@nestjs/common';
+import { BadGatewayException, BadRequestException, GatewayTimeoutException, Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { PrismaService } from './prisma.service.js';
@@ -7,8 +7,13 @@ const DETECTOR_URL = process.env.DETECTOR_URL ?? 'http://localhost:8000';
 // live IRSA searches can be slow; give up after this long (default 5 minutes)
 const DETECTOR_TIMEOUT_MS = Number(process.env.DETECTOR_TIMEOUT_MS ?? 300_000);
 
+// how many different uncached searches may run at once (each can download many FITS files)
+const MAX_CONCURRENT_SEARCHES = Number(process.env.MAX_CONCURRENT_SEARCHES ?? 2);
+
 @Injectable()
 export class FramesService {
+  private inFlight = new Map<string, Promise<unknown>>();
+
   constructor(private prisma: PrismaService) {}
 
   async frames(ra: number, dec: number, fov: number, detector: string, mode: string, coadd = 'none') {
@@ -24,6 +29,19 @@ export class FramesService {
     const hit = await this.prisma.searchCache.findUnique({ where: { key } });
     if (hit) return JSON.parse(hit.response);
 
+    // An uncached search makes the frame service download from IRSA and render images, so:
+    // the same search asked twice at once runs once, and only a few different ones run at a time.
+    const running = this.inFlight.get(key);
+    if (running) return running;
+    if (this.inFlight.size >= MAX_CONCURRENT_SEARCHES) {
+      throw new ServiceUnavailableException('Blink is busy with other new searches. Try again in a minute, or pick a preset target.');
+    }
+    const job = this.search(key, ra, dec, fov, detector, mode, coadd).finally(() => this.inFlight.delete(key));
+    this.inFlight.set(key, job);
+    return job;
+  }
+
+  private async search(key: string, ra: number, dec: number, fov: number, detector: string, mode: string, coadd: string) {
     let r: Response;
     try {
       r = await fetch(`${DETECTOR_URL}/frames`, {

@@ -68,6 +68,12 @@ node dist/main.js
 - Serves the PNGs from `data/` at `/data/`.
 - Settings (`api/.env`): `DATABASE_URL`, `DETECTOR_URL` (default `http://localhost:8000`),
   `DETECTOR_TIMEOUT_MS` (default 300000).
+- Security settings:
+  - `HOST`: default `127.0.0.1` (this machine only). Set `HOST=0.0.0.0` to let other laptops reach the API.
+  - `CORS_ORIGIN`: comma-separated sites allowed to call the API from a browser; default `*` (read-only, GET only).
+  - `RATE_LIMIT`: requests per minute per client on `/api`, default 120.
+  - `MAX_CONCURRENT_SEARCHES`: new (uncached) searches running at once, default 2; extra ones get a "busy, try again" message.
+  - Only the generated PNGs (`data/cache/`) are served; downloaded FITS files are not.
 
 **3. Web (`web/`, React + Vite, port 5173)**
 ```bash
