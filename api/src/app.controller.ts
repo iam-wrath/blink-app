@@ -1,4 +1,4 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { BadRequestException, Controller, Get, Query } from '@nestjs/common';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { FramesService } from './frames.service.js';
@@ -15,7 +15,16 @@ export class AppController {
     @Query('detector') detector = 'D2',
     @Query('mode') mode = 'raw',
   ) {
-    return this.svc.frames(parseFloat(ra), parseFloat(dec), parseFloat(fov), detector, mode);
+    const r = parseFloat(ra);
+    const d = parseFloat(dec);
+    const f = parseFloat(fov);
+    if (!Number.isFinite(r) || !Number.isFinite(d) || !Number.isFinite(f)) {
+      throw new BadRequestException('ra, dec and fov must be numbers, e.g. ?ra=133.7951&dec=-7.2451&fov=0.1');
+    }
+    if (mode !== 'raw' && mode !== 'diff') {
+      throw new BadRequestException('mode must be raw or diff');
+    }
+    return this.svc.frames(r, d, f, detector, mode);
   }
 
   @Get('targets')
