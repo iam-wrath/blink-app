@@ -1,8 +1,9 @@
 import type { FrameQuery, FramesResponse, Target } from './types';
 
 // Where the Blink API lives (set VITE_API_URL in web/.env, then restart `npm run dev`).
-// Default: http://localhost:3000/api
-export const API_URL = (import.meta.env.VITE_API_URL ?? 'http://localhost:3000/api').replace(/\/$/, '');
+// `npm run dev` defaults to http://localhost:3000/api.
+// Production builds default to /api on the site's own domain (Vercel or nginx pass it on to the API).
+export const API_URL = (import.meta.env.VITE_API_URL ?? (import.meta.env.DEV ? 'http://localhost:3000/api' : '/api')).replace(/\/$/, '');
 
 async function call<T>(path: string, timeoutMs = 6000): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, { signal: AbortSignal.timeout(timeoutMs) });

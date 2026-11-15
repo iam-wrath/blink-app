@@ -1,0 +1,42 @@
+# Render Blueprint: the Blink API and frame service. The website itself goes on Vercel (web/vercel.json).
+# Render dashboard -> New -> Blueprint -> pick this repo. See README "Hosting".
+#
+# Free plan: no card needed, but services sleep after 15 minutes without traffic (about a minute to wake),
+# and have no disk, so searches other than the five built-in targets are re-done after a restart.
+# Free services can't receive private-network calls, so the API calls the frame service at its public
+# address, protected by a shared secret (DETECTOR_TOKEN) that Render generates for both.
+services:
+  - type: web
+    name: blink-detector
+    runtime: docker
+    plan: free
+    dockerfilePath: ./detector/Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    buildFilter:
+      paths: ["detector/**", "contract/**"]
+    envVars:
+      - key: DETECTOR_TOKEN
+        generateValue: true
+
+  - type: web
+    name: blink-api
+    runtime: docker
+    plan: free
+    dockerfilePath: ./api/Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/targets
+    buildFilter:
+      paths: ["api/**", "contract/**", "seed/**"]
+    envVars:
+      # the frame service's public address; change it if Render gives the service a different name
+      - key: DETECTOR_URL
+        value: https://blink-detector.onrender.com
+      - key: DETECTOR_TOKEN
+        fromService:
+          type: web
+          name: blink-detector
+          envVarKey: DETECTOR_TOKEN
+      # requests arrive through Vercel and Render's proxies; use the visitor's own address for rate limiting
+      - key: TRUST_PROXY
+        value: "true"

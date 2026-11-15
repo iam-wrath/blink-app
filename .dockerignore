@@ -1,0 +1,17 @@
+# Keep images small and free of local state and secrets.
+.git
+.claude
+data
+**/node_modules
+**/.venv
+**/dist
+**/__pycache__
+**/*.pyc
+**/*.db
+**/*.db-journal
+**/.env
+**/.env.*
+!**/.env.example
+**/*.fits
+**/*.tsbuildinfo
+docs

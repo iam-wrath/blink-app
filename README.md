@@ -83,6 +83,55 @@ npm run dev
 ```
 API address: `VITE_API_URL` in `web/.env` (default `http://localhost:3000/api`).
 
+## Hosting: Vercel (site) + Render (API and frame service)
+
+The site is static, so it goes on Vercel. The frame service (Astropy, SciPy, minutes-long IRSA downloads)
+and the API (SQLite cache) run as Docker containers on Render. Vercel forwards `/api` and `/data/cache` to
+Render, so visitors only ever see your Vercel domain.
+
+The five challenge targets work on a fresh deploy, even with IRSA down: `seed/` holds their cached
+searches and PNGs (about 5 MB), which the API loads every time it starts.
+
+**1. Render: both back-end services, from `render.yaml`.** Push this branch to GitHub. In the Render
+dashboard: New → Blueprint → connect the repo (and pick the branch) → Apply. It creates:
+- `blink-detector`, the frame service, with a generated `DETECTOR_TOKEN` secret.
+- `blink-api`, the API, which gets the same secret and calls the frame service at
+  `https://blink-detector.onrender.com`. If Render named the frame service differently, set the API's
+  `DETECTOR_URL` to its address (Environment tab).
+- Check: `https://blink-api.onrender.com/api/targets` lists the five targets (use your API's real address).
+
+**2. Vercel: the site.** In `web/vercel.json`, replace both `YOUR-BLINK-API.onrender.com` with your API's
+address (e.g. `blink-api.onrender.com`), commit and push. Then on Vercel: Add New → Project → import this repo →
+**Root Directory: `web`** → Deploy. Vercel adds HTTPS, and you can attach your own domain under Settings → Domains.
+
+Notes on Render's free plan (no card needed):
+- Services sleep after 15 minutes without visitors and take about a minute to wake, so the first visit
+  after a quiet spell may show an error or a timeout for a few seconds. A paid instance (Starter, $7/month
+  each) stays awake; to keep searches across restarts, also add a disk mounted at `/app/state` for the API.
+- There is no disk on the free plan: searches other than the five built-in targets are kept only until the
+  service restarts.
+- The frame service has a public address here, so only requests carrying `DETECTOR_TOKEN` can start a search.
+- Vercel cuts off a forwarded request after about two minutes, so a brand-new search that takes longer shows a
+  timeout; the frame service keeps working and the next try is served from the cache.
+- Optional API variables: `RATE_LIMIT` (default 120 per minute per visitor), `MAX_CONCURRENT_SEARCHES` (default 2),
+  `DETECTOR_TIMEOUT_MS`, `CORS_ORIGIN`.
+- After changing how images are made, refresh the seed with the API running locally: `py scripts/export_seed.py`.
+
+## Hosting: Docker Compose (any server)
+
+All three parts behind nginx on one port, on any Linux server or VPS:
+
+```bash
+git clone https://github.com/iam-wrath/blink-app.git && cd blink-app
+docker compose up -d --build
+```
+
+- The site is on port 8080 (`BLINK_PORT=80 docker compose up -d` to change it). Only nginx is published; the API and frame service stay inside Compose's network.
+- Put HTTPS in front (Caddy, Traefik, certbot or your host's load balancer).
+- Data lives in two volumes: `blink-data` (downloads and PNGs) and `blink-state` (the SQLite cache). `docker compose down -v` deletes both.
+- Settings (in a `.env` next to `docker-compose.yml`): `BLINK_PORT`, `RATE_LIMIT`, `MAX_CONCURRENT_SEARCHES`, `DETECTOR_TIMEOUT_MS`.
+- Updating: `git pull && docker compose up -d --build`.
+
 ## Layout
 
 ```
@@ -90,6 +139,9 @@ contract/   API contract: example_frames.json, targets.json
 detector/   frame service: main.py (FastAPI), irsa.py (IRSA search), build_frames.py (align + PNGs)
 api/        NestJS API + SQLite cache
 web/        React viewer
+seed/       the five targets' cached searches and PNGs, loaded by the API on start
+deploy/     nginx config for the Docker setup (render.yaml is at the root)
+scripts/    export_seed.py (refreshes seed/)
 data/       downloaded FITS and generated PNGs (not in git)
 docs/       data sources, archive query results, data notes
 ```

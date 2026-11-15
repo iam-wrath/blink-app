@@ -9,6 +9,9 @@ import { AppModule } from './app.module.js';
 const HOST = process.env.HOST ?? '127.0.0.1';
 const PORT = Number(process.env.PORT ?? 3000);
 const CORS_ORIGIN = process.env.CORS_ORIGIN?.split(',').map((s) => s.trim()).filter(Boolean);
+const DETECTOR_URL = process.env.DETECTOR_URL ?? 'http://localhost:8000';
+// /frames/<10-hex search key>/<key>_raw_001.png, as written by detector/main.py
+const FRAME_PNG = /^\/frames\/[0-9a-f]{10}\/[0-9a-f]{10}_(raw|diff)_\d{3}\.png$/;
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
@@ -22,8 +25,30 @@ async function bootstrap() {
   // read-only API: browsers may only GET
   app.enableCors({ origin: CORS_ORIGIN?.length ? CORS_ORIGIN : '*', methods: ['GET', 'HEAD'] });
   app.setGlobalPrefix('api');
-  // Only the generated PNGs are public, not the downloaded FITS files or anything else in data/
-  app.useStaticAssets(join(process.cwd(), '..', 'data', 'cache'), { prefix: '/data/cache/', index: false, dotfiles: 'deny' });
+  // Behind a reverse proxy (nginx in docker-compose) set TRUST_PROXY=1, so the rate limit sees each
+  // client's own address from X-Forwarded-For instead of the proxy's.
+  // Accepts a number of proxy hops, "true" (trust all), or a list of proxy addresses.
+  const tp = process.env.TRUST_PROXY?.trim();
+  if (tp && tp !== 'false') app.set('trust proxy', tp === 'true' ? true : Number(tp) || tp);
+  // Only the generated PNGs are public, not the downloaded FITS files or anything else in data/.
+  // seed/cache (the five challenge targets, shipped in the repo) is the fallback for files not in data/cache.
+  for (const dir of [join(process.cwd(), '..', 'data', 'cache'), join(process.cwd(), '..', 'seed', 'cache')]) {
+    app.useStaticAssets(dir, { prefix: '/data/cache/', index: false, dotfiles: 'deny', maxAge: '1d' });
+  }
+  // Last resort: ask the frame service. When it runs on its own disk (e.g. on Render each service has its
+  // own volume), PNGs from new searches only exist there. Only exact frame file names are passed on.
+  app.use('/data/cache/', async (req: Request, res: Response, next: NextFunction) => {
+    if ((req.method !== 'GET' && req.method !== 'HEAD') || !FRAME_PNG.test(req.path)) return next();
+    try {
+      const r = await fetch(`${DETECTOR_URL}/data/cache${req.path}`, { signal: AbortSignal.timeout(10_000) });
+      if (!r.ok) return next();
+      res.setHeader('Content-Type', 'image/png');
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+      res.send(Buffer.from(await r.arrayBuffer()));
+    } catch {
+      next();
+    }
+  });
   await app.listen(PORT, HOST);
 }
 bootstrap();

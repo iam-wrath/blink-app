@@ -1,0 +1,43 @@
+# Blink: everything on one port.
+#   docker compose up -d --build        then open http://localhost:8080 (or http://<server>:BLINK_PORT)
+# Only the web container is published; the API and the frame service are reachable only inside this network.
+services:
+  detector:
+    build:
+      context: .
+      dockerfile: detector/Dockerfile
+    environment:
+      DETECTOR_TOKEN: ${DETECTOR_TOKEN:-}   # optional shared secret; the API sends the same one
+    volumes:
+      - blink-data:/app/data          # downloaded cutouts and generated PNGs
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    environment:
+      RATE_LIMIT: ${RATE_LIMIT:-120}
+      MAX_CONCURRENT_SEARCHES: ${MAX_CONCURRENT_SEARCHES:-2}
+      DETECTOR_TIMEOUT_MS: ${DETECTOR_TIMEOUT_MS:-300000}
+      DETECTOR_TOKEN: ${DETECTOR_TOKEN:-}
+    volumes:
+      - blink-data:/app/data          # reads the PNGs the detector writes
+      - blink-state:/app/state        # SQLite search cache
+    depends_on:
+      - detector
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+    ports:
+      - "${BLINK_PORT:-8080}:80"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  blink-data:
+  blink-state:

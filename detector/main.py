@@ -11,10 +11,12 @@ Run from the detector folder:  uvicorn main:app --port 8000
 """
 import hashlib
 import os
+import secrets
 import sys
 from typing import Literal
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Header, HTTPException
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -26,8 +28,14 @@ import irsa  # noqa: E402
 from build_frames import SOURCE_BIT, load, render, upscale_for, visits  # noqa: E402
 
 CACHE_DIR = os.path.join("data", "cache", "frames")
+os.makedirs(CACHE_DIR, exist_ok=True)
+DETECTOR_TOKEN = os.environ.get("DETECTOR_TOKEN", "")
 
-app = FastAPI(title="Blink frame service")
+# no interactive docs on a service that may be public
+app = FastAPI(title="Blink frame service", docs_url=None, redoc_url=None, openapi_url=None)
+# The generated PNGs, for the API to pass on when it doesn't share this service's disk
+# (e.g. on Render). Only data/cache/frames is exposed, never data/raw.
+app.mount("/data/cache/frames", StaticFiles(directory=CACHE_DIR), name="frames")
 
 
 class FramesRequest(BaseModel):
@@ -46,7 +54,11 @@ def health():
 
 
 @app.post("/frames")
-def frames(req: FramesRequest):
+def frames(req: FramesRequest, x_blink_token: str | None = Header(default=None)):
+    # When this service has a public address (Render's free plan), only the API may start searches:
+    # both get the same DETECTOR_TOKEN, and the API sends it as X-Blink-Token.
+    if DETECTOR_TOKEN and not secrets.compare_digest((x_blink_token or "").encode(), DETECTOR_TOKEN.encode()):
+        raise HTTPException(401, "missing or wrong X-Blink-Token")
     try:
         _, det = irsa._bandpass(req.detector)
     except ValueError as e:

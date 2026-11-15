@@ -1,8 +1,9 @@
-fastapi
-uvicorn
-numpy
-astropy
-astroquery
-scipy
-reproject
-pillow
+# Exact versions tested with Blink (Python 3.14).
+fastapi==0.163.1
+uvicorn==0.54.0
+numpy==2.5.4
+astropy==8.0.2
+astroquery==0.4.11
+scipy==1.18.1
+reproject==0.21.0
+pillow==13.0.0
